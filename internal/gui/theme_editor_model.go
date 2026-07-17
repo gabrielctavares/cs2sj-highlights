@@ -97,6 +97,20 @@ func (state *EditorState) DeleteSelected() error {
 	return fmt.Errorf("no selected HUD element")
 }
 
+func (state *EditorState) MoveLayer(direction int) error {
+	for index := range state.Theme.Elements {
+		if state.Theme.Elements[index].ID == state.SelectedID {
+			target := index + direction
+			if target < 0 || target >= len(state.Theme.Elements) {
+				return nil
+			}
+			state.Theme.Elements[index].ZIndex, state.Theme.Elements[target].ZIndex = state.Theme.Elements[target].ZIndex, state.Theme.Elements[index].ZIndex
+			return nil
+		}
+	}
+	return fmt.Errorf("no selected HUD element")
+}
+
 func clamp(value, minimum, maximum float64) float64 {
 	if value < minimum {
 		return minimum

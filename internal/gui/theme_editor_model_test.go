@@ -38,3 +38,14 @@ func TestEditorStateSetSelectedElementUpdatesProperties(t *testing.T) {
 		t.Fatalf("color = %q", got)
 	}
 }
+
+func TestEditorStateMoveLayerChangesZOrder(t *testing.T) {
+	state := NewEditorState(hudtheme.Theme{Version: 1, Name: "test", Elements: []hudtheme.Element{{ID: "a", Type: hudtheme.Box, Anchor: hudtheme.TopLeft, Width: 10, Height: 10, ZIndex: 1}, {ID: "b", Type: hudtheme.Box, Anchor: hudtheme.TopLeft, Width: 10, Height: 10, ZIndex: 2}}})
+	state.SelectedID = "a"
+	if err := state.MoveLayer(1); err != nil {
+		t.Fatal(err)
+	}
+	if state.Theme.Elements[0].ZIndex != 2 || state.Theme.Elements[1].ZIndex != 1 {
+		t.Fatalf("unexpected layers: %#v", state.Theme.Elements)
+	}
+}

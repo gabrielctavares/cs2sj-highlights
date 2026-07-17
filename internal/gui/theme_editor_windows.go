@@ -22,6 +22,8 @@ type themeEditorWindow struct {
 	layers   *walk.ListBox
 	name     *walk.Label
 	text     *walk.LineEdit
+	binding  *walk.LineEdit
+	fontSize *walk.LineEdit
 	color    *walk.LineEdit
 	x        *walk.LineEdit
 	y        *walk.LineEdit
@@ -61,7 +63,7 @@ func RunThemeEditor(owner walk.Form, path string) error {
 	_, err = (Dialog{AssignTo: &editor.dialog, Title: "Editor visual de HUD — 16:9", MinSize: Size{Width: 1180, Height: 720}, Layout: HBox{Margins: Margins{Left: 12, Top: 12, Right: 12, Bottom: 12}, Spacing: 10}, Children: []Widget{
 		Composite{MinSize: Size{Width: 200}, Layout: VBox{Spacing: 6}, Children: []Widget{
 			Label{Text: "Camadas"}, ListBox{AssignTo: &editor.layers, Model: editor.layerNames(), StretchFactor: 1, OnCurrentIndexChanged: editor.selectLayer},
-			PushButton{Text: "+ Caixa", OnClicked: func() { editor.add(hudtheme.Box) }}, PushButton{Text: "+ Texto", OnClicked: func() { editor.add(hudtheme.Text) }}, PushButton{Text: "+ Imagem", OnClicked: editor.addImage}, PushButton{Text: "Remover", OnClicked: editor.remove},
+			PushButton{Text: "+ Caixa", OnClicked: func() { editor.add(hudtheme.Box) }}, PushButton{Text: "+ Texto", OnClicked: func() { editor.add(hudtheme.Text) }}, PushButton{Text: "+ Imagem", OnClicked: editor.addImage}, PushButton{Text: "Subir camada", OnClicked: func() { editor.moveLayer(1) }}, PushButton{Text: "Descer camada", OnClicked: func() { editor.moveLayer(-1) }}, PushButton{Text: "Remover", OnClicked: editor.remove},
 		}},
 		Composite{Layout: VBox{Spacing: 6}, StretchFactor: 1, Children: []Widget{
 			Label{Text: "Prévia 16:9 — clique, arraste ou use a alça inferior direita para redimensionar"},
@@ -71,6 +73,10 @@ func RunThemeEditor(owner walk.Form, path string) error {
 		Composite{MinSize: Size{Width: 250}, Layout: Grid{Columns: 2, Spacing: 6}, Children: []Widget{
 			Label{Text: "Propriedades", ColumnSpan: 2}, Label{AssignTo: &editor.name, Text: "Selecione uma camada", ColumnSpan: 2},
 			Label{Text: "Texto"}, LineEdit{AssignTo: &editor.text, OnTextChanged: editor.applyText},
+			Label{Text: "Vínculo"}, LineEdit{AssignTo: &editor.binding, OnTextChanged: editor.applyBinding},
+			Label{Text: "Fonte"}, LineEdit{AssignTo: &editor.fontSize, OnTextChanged: func() {
+				editor.applyNumber(editor.fontSize, func(e *hudtheme.Element, v float64) { e.FontSize = int(v) })
+			}},
 			Label{Text: "Cor"}, LineEdit{AssignTo: &editor.color, OnTextChanged: editor.applyColor},
 			Label{Text: "X (%)"}, LineEdit{AssignTo: &editor.x, OnTextChanged: func() { editor.applyNumber(editor.x, func(e *hudtheme.Element, v float64) { e.X = v }) }},
 			Label{Text: "Y (%)"}, LineEdit{AssignTo: &editor.y, OnTextChanged: func() { editor.applyNumber(editor.y, func(e *hudtheme.Element, v float64) { e.Y = v }) }},
@@ -100,6 +106,11 @@ func (editor *themeEditorWindow) selectLayer() {
 
 func (editor *themeEditorWindow) add(kind hudtheme.ElementType) {
 	if editor.state.AddElement(kind) == nil {
+		editor.refresh()
+	}
+}
+func (editor *themeEditorWindow) moveLayer(direction int) {
+	if editor.state.MoveLayer(direction) == nil {
 		editor.refresh()
 	}
 }
@@ -154,6 +165,8 @@ func (editor *themeEditorWindow) refresh() {
 	}
 	editor.name.SetText(selected.ID + " · " + string(selected.Type))
 	editor.text.SetText(selected.Text)
+	editor.binding.SetText(string(selected.Binding))
+	editor.fontSize.SetText(strconv.Itoa(selected.FontSize))
 	editor.color.SetText(selected.Color)
 	editor.x.SetText(fmt.Sprintf("%.1f", selected.X))
 	editor.y.SetText(fmt.Sprintf("%.1f", selected.Y))
@@ -178,6 +191,12 @@ func (editor *themeEditorWindow) applyText() {
 func (editor *themeEditorWindow) applyColor() {
 	if !editor.updating {
 		_ = editor.state.SetSelectedElement(func(e *hudtheme.Element) { e.Color = editor.color.Text() })
+		editor.canvas.Invalidate()
+	}
+}
+func (editor *themeEditorWindow) applyBinding() {
+	if !editor.updating {
+		_ = editor.state.SetSelectedElement(func(e *hudtheme.Element) { e.Binding = hudtheme.Binding(editor.binding.Text()) })
 		editor.canvas.Invalidate()
 	}
 }
