@@ -99,3 +99,8 @@ Por padrão, o resultado fica em `dist\stage\CS2SJ-Demo`, pronto para uso ou par
 ```
 
 Referências: [HLAE](https://github.com/advancedfx/advancedfx), [comandos Source 2](https://github.com/advancedfx/advancedfx/wiki/Source2%3ACommands) e [`mirv_streams`](https://github.com/advancedfx/advancedfx/wiki/Source2%3Amirv_streams).
+
+## Desenvolvimento
+
+- [Arquitetura](docs/architecture.md)
+- Verificação local: `powershell -ExecutionPolicy Bypass -File .\scripts\verify.ps1`
