@@ -48,6 +48,7 @@ func TestAppendRejectsUnsafeOrIncompleteDecisions(t *testing.T) {
 	tests := []Decision{
 		{DemoName: `C:\\demos\\match.dem`, HighlightID: "clip", Perspective: "editorial", Breadth: "balanced"},
 		{DemoName: "match.dem", HighlightID: "", Perspective: "editorial", Breadth: "balanced"},
+		{DemoName: "match.dem", HighlightID: `C:\\private\\clip`, Perspective: "editorial", Breadth: "balanced"},
 		{DemoName: "match.dem", HighlightID: "clip", Perspective: "unknown", Breadth: "balanced"},
 	}
 	for _, decision := range tests {

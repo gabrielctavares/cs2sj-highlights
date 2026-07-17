@@ -76,8 +76,8 @@ func validate(decision Decision) error {
 	if strings.TrimSpace(decision.DemoName) == "" || strings.ContainsAny(decision.DemoName, `/\\`) || filepath.Base(decision.DemoName) != decision.DemoName {
 		return fmt.Errorf("nome da demo deve ser apenas o nome base")
 	}
-	if strings.TrimSpace(decision.HighlightID) == "" {
-		return fmt.Errorf("ID do highlight não informado")
+	if strings.TrimSpace(decision.HighlightID) == "" || strings.ContainsAny(decision.HighlightID, `/\\:`) {
+		return fmt.Errorf("ID do highlight inválido")
 	}
 	if decision.Perspective != "editorial" && decision.Perspective != "individual" {
 		return fmt.Errorf("perspectiva não suportada: %q", decision.Perspective)

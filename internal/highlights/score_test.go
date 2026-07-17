@@ -44,3 +44,19 @@ func TestEvaluateTwoFlashAssistsReachBroad(t *testing.T) {
 		t.Fatalf("unexpected flash assist score: %#v", got)
 	}
 }
+
+func TestMissingOptionalDistanceLowersConfidenceWithoutPenalty(t *testing.T) {
+	killer := model.Player{SteamID: 7, Team: model.TeamT}
+	victim := model.Player{SteamID: 8, Team: model.TeamCT}
+	known := model.Highlight{Player: killer, Actions: []model.Kill{{Killer: killer, Victim: victim, Weapon: "AK-47", Distance: 500, DistanceKnown: true}}, Context: model.CandidateContext{KillCount: 1}}
+	unknown := known
+	unknown.Actions = []model.Kill{{Killer: killer, Victim: victim, Weapon: "AK-47"}}
+	known = Evaluate(known, DefaultRules())
+	unknown = Evaluate(unknown, DefaultRules())
+	if known.Individual.Score != unknown.Individual.Score || known.Individual.Confidence != model.ConfidenceHigh || unknown.Individual.Confidence != model.ConfidenceMedium {
+		t.Fatalf("known=%#v unknown=%#v", known.Individual, unknown.Individual)
+	}
+	if len(PlayerView([]model.Highlight{unknown}, BreadthBroad, killer.SteamID)) != 0 {
+		t.Fatal("ordinary single kill must remain below broad")
+	}
+}

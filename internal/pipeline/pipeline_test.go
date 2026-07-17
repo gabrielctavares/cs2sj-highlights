@@ -681,6 +681,24 @@ func TestRenderPersistsExplicitSelection(t *testing.T) {
 	}
 }
 
+func TestRenderWithExplicitEmptySelectionCapturesNothing(t *testing.T) {
+	input, output := batchDirs(t, "match.dem")
+	demo := filepath.Join(input, "match.dem")
+	pipeline := testPipeline(output)
+	pipeline.SelectedHighlights = map[string][]string{demo: {}}
+	pipeline.Capturer = capturerFunc(func(context.Context, string, render.RenderPass, float64) (map[string]render.CaptureAssets, error) {
+		t.Fatal("capturer must not run for an explicit empty selection")
+		return nil, nil
+	})
+	manifest, err := pipeline.RenderDemo(context.Background(), demo)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if manifest.State != model.DemoNoHighlights || len(manifest.SelectedHighlightIDs) != 0 {
+		t.Fatalf("unexpected empty-selection manifest: %#v", manifest)
+	}
+}
+
 func batchDirs(t *testing.T, demos ...string) (string, string) {
 	t.Helper()
 	root := t.TempDir()
