@@ -177,7 +177,7 @@ func RenderBatch(ctx context.Context, options Options, logger *slog.Logger) ([]p
 		OutputDir: paths.OutputDir,
 		HUDMode:   options.HUDMode,
 		Parser:    demos.DemoParser{},
-		Capturer:  render.Runner{HLAEPath: paths.HLAEPath, HookDLL: paths.HookDLLPath, CS2Path: paths.CS2Path, Probe: prober.Probe, Guard: render.SteamConfigGuard{}, HUDMode: options.HUDMode},
+		Capturer:  render.Runner{HLAEPath: paths.HLAEPath, HookDLL: paths.HookDLLPath, CS2Path: paths.CS2Path, Probe: prober.Probe, Guard: render.SteamConfigGuard{}, HUDMode: options.HUDMode, Logger: logger},
 		Clips:     media.ClipBuilder{FFmpegPath: paths.FFmpegPath, FontPath: paths.FontPath, LogoPath: options.HUDLogoPath, Probe: prober.Probe, HUDMode: options.HUDMode, Logger: logger},
 		// Summary: media.SummaryBuilder{FFmpegPath: paths.FFmpegPath, Probe: prober.Probe}, // temporariamente desabilitado
 		Logger: logger,

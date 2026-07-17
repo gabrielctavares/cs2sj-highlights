@@ -1,8 +1,10 @@
 package render
 
 import (
+	"bytes"
 	"context"
 	"errors"
+	"log/slog"
 	"os"
 	"path/filepath"
 	"reflect"
@@ -99,6 +101,22 @@ func TestRunnerWritesCFGLaunchesAndRemovesOnSuccess(t *testing.T) {
 	wantArgs := CustomLoaderArgs(runner.HookDLL, runner.CS2Path, cfgName)
 	if !reflect.DeepEqual(launchedArgs, wantArgs) {
 		t.Fatalf("got %#v want %#v", launchedArgs, wantArgs)
+	}
+}
+
+func TestRunnerKeepsAssetsWhenCFGCleanupFails(t *testing.T) {
+	runner, pass, _ := successfulRunner(t, true)
+	var logs bytes.Buffer
+	runner.Logger = slog.New(slog.NewTextHandler(&logs, nil))
+	runner.Remove = func(string) error { return errors.New("access denied") }
+	runner.Run = func(context.Context, string, ...string) ([]byte, error) { return nil, nil }
+
+	assets, err := runner.RunPass(context.Background(), `C:\demos\final.dem`, pass, 64)
+	if err != nil || assets["clip"].VideoPath == "" {
+		t.Fatalf("capture discarded after cleanup error: assets=%#v err=%v", assets, err)
+	}
+	if !strings.Contains(logs.String(), "cfg.cleanup_failed") {
+		t.Fatalf("missing cleanup warning: %s", logs.String())
 	}
 }
 

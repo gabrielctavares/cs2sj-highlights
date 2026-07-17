@@ -7,6 +7,7 @@ import (
 	"errors"
 	"fmt"
 	"io"
+	"log/slog"
 	"os"
 	"path/filepath"
 	"sort"
@@ -35,6 +36,8 @@ type Runner struct {
 	Guard    ConfigGuard
 	HUDMode  model.HUDMode
 	ListCS2  ProcessLister
+	Logger   *slog.Logger
+	Remove   func(string) error
 }
 
 type CaptureAssets struct {
@@ -143,8 +146,8 @@ func (runner Runner) RunPass(ctx context.Context, demoPath string, pass RenderPa
 		assets, ready := runner.collectAssets(ctx, pass, observations)
 		if ready {
 			for _, path := range cfgPaths {
-				if err := os.Remove(path); err != nil {
-					return nil, fmt.Errorf("remove successful HLAE CFG %q: %w", path, err)
+				if removeErr := runner.Remove(path); removeErr != nil && !errors.Is(removeErr, os.ErrNotExist) {
+					runner.Logger.Warn("cfg.cleanup_failed", "path", path, "error", removeErr)
 				}
 			}
 			return assets, nil
@@ -182,6 +185,12 @@ func (runner *Runner) setDefaults() {
 			}
 			return parseTasklistCS2PIDs(output)
 		}
+	}
+	if runner.Logger == nil {
+		runner.Logger = slog.New(slog.NewTextHandler(io.Discard, nil))
+	}
+	if runner.Remove == nil {
+		runner.Remove = os.Remove
 	}
 }
 
