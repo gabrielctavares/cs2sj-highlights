@@ -1,12 +1,16 @@
 package render
 
 import (
+	"bytes"
 	"context"
+	"encoding/csv"
 	"errors"
 	"fmt"
+	"io"
 	"os"
 	"path/filepath"
 	"sort"
+	"strconv"
 	"strings"
 	"time"
 	"unicode"
@@ -17,6 +21,7 @@ import (
 )
 
 type CommandRunner func(context.Context, string, ...string) ([]byte, error)
+type ProcessLister func(context.Context) (map[uint32]struct{}, error)
 
 type Runner struct {
 	HLAEPath string
@@ -29,6 +34,7 @@ type Runner struct {
 	Sleep    func(context.Context, time.Duration) error
 	Guard    ConfigGuard
 	HUDMode  model.HUDMode
+	ListCS2  ProcessLister
 }
 
 type CaptureAssets struct {
@@ -62,6 +68,21 @@ func (runner Runner) RunPass(ctx context.Context, demoPath string, pass RenderPa
 			}
 		}()
 	}
+	baseline, err := runner.ListCS2(ctx)
+	if err != nil {
+		return nil, fmt.Errorf("list CS2 processes before capture: %w", err)
+	}
+	var trackedPID uint32
+	discoverPID := func(discoveryCtx context.Context) {
+		if trackedPID != 0 {
+			return
+		}
+		current, listErr := runner.ListCS2(discoveryCtx)
+		if listErr != nil {
+			return
+		}
+		trackedPID, _ = newProcessPID(baseline, current)
+	}
 	configuration, err := BuildCFG(demoPath, pass, tickRate, runner.HUDMode)
 	if err != nil {
 		return nil, fmt.Errorf("build HLAE CFG for pass %d: %w", pass.Index, err)
@@ -92,12 +113,15 @@ func (runner Runner) RunPass(ctx context.Context, demoPath string, pass RenderPa
 	launchCtx, cancelLaunch := context.WithTimeout(ctx, runner.Timeout)
 	_, launchErr := runner.Run(launchCtx, runner.HLAEPath, CustomLoaderArgs(runner.HookDLL, runner.CS2Path, cfgName)...)
 	cancelLaunch()
+	discoveryCtx, cancelDiscovery := context.WithTimeout(context.WithoutCancel(ctx), 5*time.Second)
+	discoverPID(discoveryCtx)
+	cancelDiscovery()
 	if launchErr != nil {
 		if errors.Is(launchErr, context.Canceled) || errors.Is(launchErr, context.DeadlineExceeded) {
-			return nil, runner.stopForCancellation(launchErr)
+			return nil, runner.stopForCancellation(ctx, launchErr, trackedPID)
 		}
 		if ctxErr := ctx.Err(); ctxErr != nil {
-			return nil, runner.stopForCancellation(ctxErr)
+			return nil, runner.stopForCancellation(ctx, ctxErr, trackedPID)
 		}
 		return nil, fmt.Errorf("launch HLAE for pass %d (CFG retained at %q): %w", pass.Index, cfgPath, launchErr)
 	}
@@ -105,11 +129,12 @@ func (runner Runner) RunPass(ctx context.Context, demoPath string, pass RenderPa
 	deadline := runner.Now().Add(runner.Timeout)
 	observations := make(map[string]fileObservation)
 	for {
+		discoverPID(ctx)
 		if ctxErr := ctx.Err(); ctxErr != nil {
-			return nil, runner.stopForCancellation(ctxErr)
+			return nil, runner.stopForCancellation(ctx, ctxErr, trackedPID)
 		}
 		if !runner.Now().Before(deadline) {
-			killErr := runner.killCS2()
+			killErr := runner.stopTrackedCS2(ctx, trackedPID)
 			if killErr != nil {
 				return nil, fmt.Errorf("timeout waiting for HLAE pass %d; taskkill failed: %v", pass.Index, killErr)
 			}
@@ -129,7 +154,7 @@ func (runner Runner) RunPass(ctx context.Context, demoPath string, pass RenderPa
 			if ctxErr == nil {
 				ctxErr = err
 			}
-			return nil, runner.stopForCancellation(ctxErr)
+			return nil, runner.stopForCancellation(ctx, ctxErr, trackedPID)
 		}
 	}
 }
@@ -147,6 +172,15 @@ func (runner *Runner) setDefaults() {
 	if runner.Run == nil {
 		runner.Run = func(ctx context.Context, name string, args ...string) ([]byte, error) {
 			return subprocess.CommandContext(ctx, name, args...).CombinedOutput()
+		}
+	}
+	if runner.ListCS2 == nil {
+		runner.ListCS2 = func(ctx context.Context) (map[uint32]struct{}, error) {
+			output, err := runner.Run(ctx, "tasklist", "/FI", "IMAGENAME eq cs2.exe", "/FO", "CSV", "/NH")
+			if err != nil {
+				return nil, err
+			}
+			return parseTasklistCS2PIDs(output)
 		}
 	}
 }
@@ -215,16 +249,58 @@ func stableWAV(directory string, observations map[string]fileObservation) (strin
 	return matches[0], true
 }
 
-func (runner Runner) stopForCancellation(cause error) error {
-	if killErr := runner.killCS2(); killErr != nil {
+func (runner Runner) stopForCancellation(ctx context.Context, cause error, pid uint32) error {
+	if killErr := runner.stopTrackedCS2(ctx, pid); killErr != nil {
 		return fmt.Errorf("%w; taskkill failed: %v", cause, killErr)
 	}
 	return cause
 }
 
-func (runner Runner) killCS2() error {
-	_, err := runner.Run(context.Background(), "taskkill", "/IM", "cs2.exe", "/T", "/F")
+func (runner Runner) stopTrackedCS2(ctx context.Context, pid uint32) error {
+	if pid == 0 {
+		return nil
+	}
+	stopCtx, cancel := context.WithTimeout(context.WithoutCancel(ctx), 15*time.Second)
+	defer cancel()
+	_, err := runner.Run(stopCtx, "taskkill", "/PID", strconv.FormatUint(uint64(pid), 10), "/T", "/F")
 	return err
+}
+
+func newProcessPID(baseline, current map[uint32]struct{}) (uint32, bool) {
+	var result uint32
+	for pid := range current {
+		if _, existed := baseline[pid]; existed || pid == 0 {
+			continue
+		}
+		if result == 0 || pid < result {
+			result = pid
+		}
+	}
+	return result, result != 0
+}
+
+func parseTasklistCS2PIDs(output []byte) (map[uint32]struct{}, error) {
+	reader := csv.NewReader(bytes.NewReader(output))
+	reader.FieldsPerRecord = -1
+	result := make(map[uint32]struct{})
+	for {
+		record, err := reader.Read()
+		if err != nil {
+			if errors.Is(err, io.EOF) {
+				break
+			}
+			return nil, fmt.Errorf("parse tasklist output: %w", err)
+		}
+		if len(record) < 2 || !strings.EqualFold(strings.TrimSpace(record[0]), "cs2.exe") {
+			continue
+		}
+		pid, err := strconv.ParseUint(strings.TrimSpace(record[1]), 10, 32)
+		if err != nil || pid == 0 {
+			continue
+		}
+		result[uint32(pid)] = struct{}{}
+	}
+	return result, nil
 }
 
 func sleepContext(ctx context.Context, duration time.Duration) error {

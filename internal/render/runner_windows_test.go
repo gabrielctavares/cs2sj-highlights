@@ -169,7 +169,7 @@ func TestRunnerTimeoutKillsOwnedCS2(t *testing.T) {
 	runner.Run = func(_ context.Context, name string, args ...string) ([]byte, error) {
 		if strings.EqualFold(name, "taskkill") {
 			killed++
-			want := []string{"/IM", "cs2.exe", "/T", "/F"}
+			want := []string{"/PID", "4312", "/T", "/F"}
 			if !reflect.DeepEqual(args, want) {
 				t.Fatalf("unexpected taskkill args: %#v", args)
 			}
@@ -181,6 +181,26 @@ func TestRunnerTimeoutKillsOwnedCS2(t *testing.T) {
 	}
 	if killed != 1 {
 		t.Fatalf("taskkill called %d times", killed)
+	}
+}
+
+func TestNewProcessPIDSelectsOnlyProcessAbsentFromBaseline(t *testing.T) {
+	baseline := map[uint32]struct{}{100: {}, 200: {}}
+	current := map[uint32]struct{}{100: {}, 200: {}, 4312: {}}
+	pid, ok := newProcessPID(baseline, current)
+	if !ok || pid != 4312 {
+		t.Fatalf("got pid=%d ok=%v", pid, ok)
+	}
+}
+
+func TestParseTasklistCS2PIDs(t *testing.T) {
+	output := []byte("\"cs2.exe\",\"4312\",\"Console\",\"1\",\"1,000 K\"\r\n\"steam.exe\",\"99\",\"Console\",\"1\",\"2,000 K\"\r\n")
+	got, err := parseTasklistCS2PIDs(output)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if _, ok := got[4312]; !ok || len(got) != 1 {
+		t.Fatalf("unexpected pids: %#v", got)
 	}
 }
 
@@ -226,6 +246,16 @@ func successfulRunner(t *testing.T, embeddedAudio bool) (Runner, RenderPass, str
 		HLAEPath: filepath.Join(root, "hlae.exe"), HookDLL: filepath.Join(root, "AfxHookSource2.dll"), CS2Path: cs2,
 		Timeout: 5 * time.Second, Now: func() time.Time { return time.Unix(1_700_000_000, 0) },
 		Sleep: func(context.Context, time.Duration) error { return nil },
+		ListCS2: func() ProcessLister {
+			calls := 0
+			return func(context.Context) (map[uint32]struct{}, error) {
+				calls++
+				if calls == 1 {
+					return map[uint32]struct{}{100: {}}, nil
+				}
+				return map[uint32]struct{}{100: {}, 4312: {}}, nil
+			}
+		}(),
 		Probe: func(_ context.Context, path string) (media.ProbeResult, error) {
 			if strings.EqualFold(filepath.Ext(path), ".wav") {
 				return media.ProbeResult{Duration: 2, AudioCodec: "pcm_s16le", HasAudio: true}, nil
