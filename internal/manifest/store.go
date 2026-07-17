@@ -90,8 +90,8 @@ func (Store) Save(path string, value model.Manifest) (err error) {
 }
 
 func Compatible(manifest model.Manifest, demoHash, configFingerprint string) bool {
-	return manifest.SchemaVersion == "manifest-v1" &&
-		manifest.RulesVersion == "rules-v2" &&
+	return manifest.SchemaVersion == model.ManifestSchemaVersion &&
+		manifest.RulesVersion == model.RulesVersion &&
 		manifest.DemoSHA256 == demoHash &&
 		manifest.ConfigFingerprint == configFingerprint
 }

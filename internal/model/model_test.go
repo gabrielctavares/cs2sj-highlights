@@ -8,7 +8,7 @@ func TestNewManifestStartsPending(t *testing.T) {
 
 	got := NewManifest(timeline, "abc123", "cfg456", highlights)
 
-	if got.SchemaVersion != "manifest-v1" || got.RulesVersion != "rules-v2" {
+	if got.SchemaVersion != ManifestSchemaVersion || got.RulesVersion != RulesVersion || got.DemoMetadata != DemoMetadataVersion {
 		t.Fatalf("unexpected versions: %#v", got)
 	}
 	if got.State != DemoPending || got.Highlights[0].Status != ClipPending {

@@ -18,11 +18,6 @@ import (
 	"github.com/gabrielctavares/cs2sj-highlights/internal/render"
 )
 
-const (
-	currentMasterVersion = "capture-v5-crosshair"
-	currentOutputVersion = "full-clip-v2-audio-sync"
-)
-
 type DemoParser interface {
 	Parse(context.Context, string) (model.Timeline, error)
 }
@@ -125,7 +120,7 @@ func (pipeline *Pipeline) AnalyzeDemo(ctx context.Context, demoPath string) (mod
 		Codec        string `json:"codec"`
 		CRF          int    `json:"crf"`
 		VerticalMode string `json:"vertical_mode"`
-	}{"rules-v2", 1920, 1080, 60, "h264", 18, "blurred-background"})
+	}{model.RulesVersion, 1920, 1080, 60, "h264", 18, "blurred-background"})
 	if err != nil {
 		return model.Manifest{}, err
 	}
@@ -134,7 +129,7 @@ func (pipeline *Pipeline) AnalyzeDemo(ctx context.Context, demoPath string) (mod
 		if manifestpkg.Compatible(existing, demoHash, fingerprint) {
 			changed := false
 			metadataMigrated := false
-			if existing.DemoMetadata != "demo-v5" {
+			if existing.DemoMetadata != model.DemoMetadataVersion || existing.TickRate <= 0 {
 				timeline, parseErr := pipeline.Parser.Parse(ctx, demoPath)
 				if parseErr != nil {
 					return model.Manifest{}, fmt.Errorf("parse demo team names %q: %w", demoPath, parseErr)
@@ -182,7 +177,8 @@ func (pipeline *Pipeline) AnalyzeDemo(ctx context.Context, demoPath string) (mod
 						}
 					}
 				}
-				existing.DemoMetadata = "demo-v5"
+				existing.TickRate = timeline.TickRate
+				existing.DemoMetadata = model.DemoMetadataVersion
 				changed = true
 				metadataMigrated = true
 			}
@@ -235,10 +231,10 @@ func (pipeline *Pipeline) AnalyzeDemo(ctx context.Context, demoPath string) (mod
 			Horizontal: filepath.Join(demoRoot, "clips", fmt.Sprintf("%02d-%s-%s-16x9.mp4", index+1, safePlayer, primary)),
 		}
 		selected[index].MasterMode = pipeline.HUDMode.CaptureMode()
-		selected[index].MasterVersion = currentMasterVersion
+		selected[index].MasterVersion = model.MasterVersion
 		selected[index].MasterPath = masterPath(demoRoot, selected[index].MasterMode, selected[index].ID)
 		selected[index].OutputHUDMode = pipeline.HUDMode
-		selected[index].OutputVersion = currentOutputVersion
+		selected[index].OutputVersion = model.OutputVersion
 		selected[index].HUD = hud
 		for _, round := range timeline.Rounds {
 			if round.Number == selected[index].Round {
@@ -600,9 +596,9 @@ func (pipeline *Pipeline) reconcileHUDMode(manifestPath string, highlight *model
 		}
 		changed = true
 	}
-	if highlight.MasterMode != desiredMasterMode || highlight.MasterVersion != currentMasterVersion {
+	if highlight.MasterMode != desiredMasterMode || highlight.MasterVersion != model.MasterVersion {
 		highlight.MasterMode = desiredMasterMode
-		highlight.MasterVersion = currentMasterVersion
+		highlight.MasterVersion = model.MasterVersion
 		highlight.MasterPath = masterPath(demoRoot, desiredMasterMode, highlight.ID)
 		highlight.MasterAudioPath = ""
 		highlight.Attempts = 0
@@ -624,8 +620,8 @@ func (pipeline *Pipeline) reconcileHUDMode(manifestPath string, highlight *model
 		}
 		changed = true
 	}
-	if highlight.OutputVersion != currentOutputVersion {
-		highlight.OutputVersion = currentOutputVersion
+	if highlight.OutputVersion != model.OutputVersion {
+		highlight.OutputVersion = model.OutputVersion
 		if highlight.Status == model.ClipCompleted {
 			if fileReady(highlight.MasterPath) {
 				highlight.Status = model.ClipCaptured
@@ -640,7 +636,7 @@ func (pipeline *Pipeline) reconcileHUDMode(manifestPath string, highlight *model
 }
 
 func masterPath(demoRoot, mode, highlightID string) string {
-	return filepath.Join(demoRoot, "masters", mode, currentMasterVersion, highlightID, "video.mp4")
+	return filepath.Join(demoRoot, "masters", mode, model.MasterVersion, highlightID, "video.mp4")
 }
 
 func (pipeline *Pipeline) logger() *slog.Logger {

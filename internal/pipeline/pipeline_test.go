@@ -361,7 +361,7 @@ func TestFullClipV1ReusesMasterAndRebuildsOnlyOutputForAudioSync(t *testing.T) {
 		t.Fatal(err)
 	}
 	updated := got.Highlights[0]
-	if updated.MasterPath != master || updated.Status != model.ClipCaptured || updated.OutputVersion != currentOutputVersion {
+	if updated.MasterPath != master || updated.Status != model.ClipCaptured || updated.OutputVersion != model.OutputVersion {
 		t.Fatalf("final output was not invalidated while preserving master: %#v", updated)
 	}
 }
@@ -393,7 +393,7 @@ func TestOutdatedCleanCaptureIsNotReusedAfterHUDFix(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	if got.Highlights[0].MasterVersion != currentMasterVersion || got.Highlights[0].MasterPath == oldPath || got.Highlights[0].Status != model.ClipPending {
+	if got.Highlights[0].MasterVersion != model.MasterVersion || got.Highlights[0].MasterPath == oldPath || got.Highlights[0].Status != model.ClipPending {
 		t.Fatalf("outdated clean master was reused: %#v", got.Highlights[0])
 	}
 }
@@ -543,7 +543,7 @@ func TestLegacyDemoMetadataAddsPlayerTeamWithoutDiscardingMaster(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	if parses != 2 || got.DemoMetadata != "demo-v5" || got.Highlights[0].Player.TeamName != "ONU" {
+	if parses != 2 || got.DemoMetadata != model.DemoMetadataVersion || got.TickRate != 64 || got.Highlights[0].Player.TeamName != "ONU" {
 		t.Fatalf("metadata was not migrated: parses=%d manifest=%#v", parses, got)
 	}
 	if !got.Highlights[0].HUD.ScoreKnown || got.Highlights[0].HUD.ScoreA != 3 || got.Highlights[0].HUD.ScoreB != 2 || len(got.Highlights[0].ActionOffsets) != 2 {

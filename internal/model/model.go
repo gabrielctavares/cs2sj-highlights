@@ -145,8 +145,8 @@ func NewManifest(t Timeline, demoHash, configFingerprint string, highlights []Hi
 		state = DemoNoHighlights
 	}
 	return Manifest{
-		SchemaVersion:     "manifest-v1",
-		RulesVersion:      "rules-v2",
+		SchemaVersion:     ManifestSchemaVersion,
+		RulesVersion:      RulesVersion,
 		ConfigFingerprint: configFingerprint,
 		DemoSHA256:        demoHash,
 		DemoPath:          t.DemoPath,
@@ -154,7 +154,7 @@ func NewManifest(t Timeline, demoHash, configFingerprint string, highlights []Hi
 		TickRate:          t.TickRate,
 		TeamA:             t.TeamA,
 		TeamB:             t.TeamB,
-		DemoMetadata:      "demo-v5",
+		DemoMetadata:      DemoMetadataVersion,
 		State:             state,
 		Highlights:        highlights,
 	}
