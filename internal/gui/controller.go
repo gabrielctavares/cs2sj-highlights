@@ -6,10 +6,12 @@ import (
 	"fmt"
 	"io"
 	"log/slog"
+	"path/filepath"
 	"strings"
 	"sync"
 
 	"github.com/gabrielctavares/cs2sj-highlights/internal/cli"
+	"github.com/gabrielctavares/cs2sj-highlights/internal/feedback"
 	"github.com/gabrielctavares/cs2sj-highlights/internal/model"
 	"github.com/gabrielctavares/cs2sj-highlights/internal/pipeline"
 )
@@ -32,6 +34,7 @@ type StartRequest struct {
 	SelectedHighlights map[string][]string
 	HUDMode            model.HUDMode
 	HUDThemePath       string
+	Decisions          []feedback.Decision
 }
 
 type Event struct {
@@ -44,14 +47,15 @@ type Event struct {
 }
 
 type Controller struct {
-	mu      sync.Mutex
-	running bool
-	render  RenderFunc
-	wait    sync.WaitGroup
+	mu             sync.Mutex
+	running        bool
+	render         RenderFunc
+	appendFeedback func(string, []feedback.Decision) error
+	wait           sync.WaitGroup
 }
 
 func NewController(render RenderFunc) *Controller {
-	return &Controller{render: render}
+	return &Controller{render: render, appendFeedback: feedback.Append}
 }
 
 func (controller *Controller) Start(ctx context.Context, request StartRequest, report func(Event)) error {
@@ -84,6 +88,12 @@ func (controller *Controller) Start(ctx context.Context, request StartRequest, r
 func (controller *Controller) run(ctx context.Context, request StartRequest, report func(Event)) {
 	defer controller.wait.Done()
 	report(Event{State: StateRunning, Message: "Iniciando processamento das demos..."})
+	if len(request.Decisions) > 0 && controller.appendFeedback != nil {
+		feedbackPath := filepath.Join(request.Values.OutputDir, "selection-decisions.jsonl")
+		if err := controller.appendFeedback(feedbackPath, request.Decisions); err != nil {
+			report(Event{State: StateRunning, Message: "Aviso: não foi possível registrar o feedback local: " + err.Error()})
+		}
+	}
 	writer := eventWriter{report: report}
 	logger := slog.New(slog.NewTextHandler(writer, nil))
 	results, err := controller.render(ctx, cli.Options{

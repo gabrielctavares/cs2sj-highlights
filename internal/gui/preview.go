@@ -6,6 +6,7 @@ import (
 	"sort"
 	"strings"
 
+	"github.com/gabrielctavares/cs2sj-highlights/internal/feedback"
 	"github.com/gabrielctavares/cs2sj-highlights/internal/highlights"
 	"github.com/gabrielctavares/cs2sj-highlights/internal/model"
 	"github.com/gabrielctavares/cs2sj-highlights/internal/pipeline"
@@ -37,6 +38,8 @@ type ClipChoice struct {
 	Score       int
 	Explanation string
 	Perspective Perspective
+	Factors     []model.ScoreFactor
+	Confidence  model.Confidence
 	Selected    bool // compatibilidade temporária com a tabela legada do Windows
 }
 
@@ -187,13 +190,43 @@ func (state *PreviewState) choices(items []model.Highlight, perspective Perspect
 		if perspective == PerspectiveIndividual {
 			choice.Score = item.Individual.Score
 			choice.Explanation = item.Individual.Explanation
+			choice.Factors = append([]model.ScoreFactor(nil), item.Individual.Factors...)
+			choice.Confidence = item.Individual.Confidence
 		} else {
 			choice.Score = item.Editorial.Score
 			choice.Explanation = item.Editorial.Explanation
+			choice.Factors = append([]model.ScoreFactor(nil), item.Editorial.Factors...)
+			choice.Confidence = item.Editorial.Confidence
 		}
 		choices = append(choices, choice)
 	}
 	return choices
+}
+
+func FeedbackDecisions(editorial, individual, final []ClipChoice, breadth highlights.Breadth) []feedback.Decision {
+	selected := make(map[string]struct{}, len(final))
+	for _, choice := range final {
+		selected[choiceKey(choice.DemoPath, choice.ID)] = struct{}{}
+	}
+	visible := make([]ClipChoice, 0, len(editorial)+len(individual))
+	visible = append(visible, editorial...)
+	visible = append(visible, individual...)
+	decisions := make([]feedback.Decision, 0, len(visible))
+	for _, choice := range visible {
+		_, included := selected[choiceKey(choice.DemoPath, choice.ID)]
+		decisions = append(decisions, feedback.Decision{
+			DemoName:      filepath.Base(choice.DemoPath),
+			HighlightID:   choice.ID,
+			Perspective:   string(choice.Perspective),
+			Breadth:       string(breadth),
+			PlayerSteamID: choice.SteamID,
+			Score:         choice.Score,
+			Factors:       append([]model.ScoreFactor(nil), choice.Factors...),
+			Confidence:    choice.Confidence,
+			Selected:      included,
+		})
+	}
+	return decisions
 }
 
 func choiceKey(demoPath, id string) string {

@@ -339,6 +339,7 @@ func (window *applicationWindow) startProcessing() {
 	}
 	choices := window.preview.FinalChoices()
 	selected := window.preview.SelectedHighlights()
+	decisions := FeedbackDecisions(window.editorialModel.Choices(), window.playerModel.Choices(), choices, window.currentBreadth())
 	if len(choices) == 0 {
 		window.showError("Selecione os clipes", fmt.Errorf("adicione pelo menos um clipe à seleção final"))
 		return
@@ -369,7 +370,7 @@ func (window *applicationWindow) startProcessing() {
 	window.cancelWork = cancel
 	window.setRunning(true)
 	window.appendStatus(fmt.Sprintf("Iniciando processamento de %d clipe(s) na seleção final...", len(choices)))
-	err = window.controller.Start(renderContext, StartRequest{Values: values, Bundle: bundle, SelectedHighlights: selected, HUDMode: window.hudMode(), HUDThemePath: window.hudThemePath()}, window.report)
+	err = window.controller.Start(renderContext, StartRequest{Values: values, Bundle: bundle, SelectedHighlights: selected, HUDMode: window.hudMode(), HUDThemePath: window.hudThemePath(), Decisions: decisions}, window.report)
 	if err != nil {
 		cancel()
 		window.cancelWork = nil

@@ -92,3 +92,17 @@ func TestPreviewStateReportsDemoFailure(t *testing.T) {
 		t.Fatal("expected preview error")
 	}
 }
+
+func TestFeedbackDecisionsKeepPerspectiveAndSelectionWithoutPaths(t *testing.T) {
+	state, err := NewPreviewState(previewResults(t.TempDir()))
+	if err != nil {
+		t.Fatal(err)
+	}
+	editorial := state.EditorialChoices(highlights.BreadthBalanced)
+	individual := state.PlayerChoices(highlights.BreadthBalanced, 10)
+	state.Add(individual[0])
+	decisions := FeedbackDecisions(editorial, individual, state.FinalChoices(), highlights.BreadthBalanced)
+	if len(decisions) != 4 || decisions[0].Perspective != "editorial" || decisions[2].Perspective != "individual" || decisions[2].DemoName != "b.dem" || !decisions[2].Selected {
+		t.Fatalf("unexpected decisions: %#v", decisions)
+	}
+}

@@ -5,9 +5,11 @@ import (
 	"errors"
 	"log/slog"
 	"path/filepath"
+	"strings"
 	"testing"
 
 	"github.com/gabrielctavares/cs2sj-highlights/internal/cli"
+	"github.com/gabrielctavares/cs2sj-highlights/internal/feedback"
 	"github.com/gabrielctavares/cs2sj-highlights/internal/model"
 	"github.com/gabrielctavares/cs2sj-highlights/internal/pipeline"
 )
@@ -24,6 +26,46 @@ func validStartRequest(t *testing.T) StartRequest {
 	return StartRequest{
 		Values: FormValues{CS2Path: cs2, InputDir: demos, OutputDir: filepath.Join(root, "videos")},
 		Bundle: Bundle{RootPath: filepath.Dir(hlae), HLAEPath: hlae, HookDLLPath: hook, LogoPath: logo},
+	}
+}
+
+func TestControllerContinuesRenderingWhenFeedbackAppendFails(t *testing.T) {
+	rendered := make(chan struct{})
+	events := make(chan Event, 16)
+	warnings := make(chan string, 1)
+	controller := NewController(func(context.Context, cli.Options, *slog.Logger) ([]pipeline.Result, error) {
+		close(rendered)
+		return []pipeline.Result{{Manifest: model.Manifest{State: model.DemoCompleted}}}, nil
+	})
+	controller.appendFeedback = func(path string, decisions []feedback.Decision) error {
+		if filepath.Base(path) != "selection-decisions.jsonl" || len(decisions) != 1 {
+			t.Fatalf("unexpected feedback call: %q %#v", path, decisions)
+		}
+		return errors.New("disk full")
+	}
+	request := validStartRequest(t)
+	request.Decisions = []feedback.Decision{{DemoName: "match.dem", HighlightID: "clip", Perspective: "editorial", Breadth: "balanced"}}
+	if err := controller.Start(context.Background(), request, func(event Event) {
+		if strings.Contains(event.Message, "feedback local") {
+			warnings <- event.Message
+		}
+		events <- event
+	}); err != nil {
+		t.Fatal(err)
+	}
+	<-rendered
+	final := waitFinalEvent(t, events)
+	controller.Wait()
+	if final.State != StateCompleted {
+		t.Fatalf("render did not complete: %#v", final)
+	}
+	select {
+	case warning := <-warnings:
+		if !strings.Contains(warning, "disk full") {
+			t.Fatalf("unexpected warning: %q", warning)
+		}
+	default:
+		t.Fatal("feedback warning was not reported")
 	}
 }
 
