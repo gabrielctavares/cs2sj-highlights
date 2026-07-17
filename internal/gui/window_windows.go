@@ -12,6 +12,7 @@ import (
 	"strings"
 
 	"github.com/gabrielctavares/cs2sj-highlights/internal/cli"
+	"github.com/gabrielctavares/cs2sj-highlights/internal/highlights"
 	"github.com/gabrielctavares/cs2sj-highlights/internal/hudtheme"
 	"github.com/gabrielctavares/cs2sj-highlights/internal/model"
 	"github.com/gabrielctavares/cs2sj-highlights/internal/preflight"
@@ -30,7 +31,12 @@ type applicationWindow struct {
 	cancelWork      context.CancelFunc
 	analyzing       bool
 	vacWarningSeen  bool
-	choiceModel     *choiceTableModel
+	preview         *PreviewState
+	editorialModel  *choiceTableModel
+	playerModel     *choiceTableModel
+	finalModel      *choiceTableModel
+	players         []PlayerOption
+	favoriteSteamID uint64
 	updatingHUD     bool
 	applicationIcon *walk.Icon
 
@@ -40,13 +46,18 @@ type applicationWindow struct {
 	outputEdit     *walk.LineEdit
 	hudThemeEdit   *walk.LineEdit
 	statusEdit     *walk.TextEdit
-	choiceTable    *walk.TableView
+	editorialTable *walk.TableView
+	playerTable    *walk.TableView
+	finalTable     *walk.TableView
+	breadthCombo   *walk.ComboBox
+	playerCombo    *walk.ComboBox
 	cs2Browse      *walk.PushButton
 	inputBrowse    *walk.PushButton
 	outputBrowse   *walk.PushButton
 	analyze        *walk.PushButton
-	selectAll      *walk.PushButton
-	selectNone     *walk.PushButton
+	addEditorial   *walk.PushButton
+	addPlayer      *walk.PushButton
+	removeFinal    *walk.PushButton
 	selection      *walk.Label
 	process        *walk.PushButton
 	openOutput     *walk.PushButton
@@ -122,8 +133,23 @@ func loadApplicationIcon(executablePath string, loader applicationIconLoader) (*
 	return loader(executablePath, 0, 32)
 }
 
+func clipTableColumns() []TableViewColumn {
+	return []TableViewColumn{
+		{Title: "Demo", Width: 150},
+		{Title: "Mapa", Width: 95},
+		{Title: "Jogador", Width: 120},
+		{Title: "Tipo", Width: 180},
+		{Title: "Round", Width: 55, Alignment: AlignFar},
+		{Title: "Nota", Width: 55, Alignment: AlignFar},
+		{Title: "Por que apareceu", Width: 330},
+	}
+}
+
 func (window *applicationWindow) create(config Config) error {
-	window.choiceModel = newChoiceTableModel(window.updateSelectionStatus)
+	window.editorialModel = newChoiceTableModel()
+	window.playerModel = newChoiceTableModel()
+	window.finalModel = newChoiceTableModel()
+	window.favoriteSteamID = config.FavoriteSteamID
 	definition := MainWindow{
 		AssignTo: &window.mainWindow,
 		Title:    "CS2SJ Demo - Highlights",
@@ -131,7 +157,7 @@ func (window *applicationWindow) create(config Config) error {
 		Size:     Size{Width: 1100, Height: 780},
 		Layout:   VBox{Margins: Margins{Left: 14, Top: 14, Right: 14, Bottom: 14}, Spacing: 10},
 		Children: []Widget{
-			Label{Text: "Selecione os caminhos, analise as demos e marque os highlights que deseja gerar."},
+			Label{Text: "Analise as demos, explore os melhores momentos gerais ou de um jogador e monte sua seleção final."},
 			Composite{
 				Layout: Grid{Columns: 3, Spacing: 8},
 				Children: []Widget{
@@ -163,28 +189,37 @@ func (window *applicationWindow) create(config Config) error {
 				Layout: HBox{Spacing: 8},
 				Children: []Widget{
 					PushButton{AssignTo: &window.analyze, Text: "Analisar demos", MinSize: Size{Width: 140, Height: 34}, OnClicked: window.startAnalysis},
-					PushButton{AssignTo: &window.selectAll, Text: "Marcar todos", Enabled: false, OnClicked: func() { window.choiceModel.SetAll(true) }},
-					PushButton{AssignTo: &window.selectNone, Text: "Desmarcar todos", Enabled: false, OnClicked: func() { window.choiceModel.SetAll(false) }},
+					Label{Text: "Abrangência:"},
+					ComboBox{AssignTo: &window.breadthCombo, Model: []string{"Restrita", "Equilibrada", "Ampla"}, CurrentIndex: 1, Enabled: false, OnCurrentIndexChanged: window.refreshCatalogViews},
 					Label{AssignTo: &window.selection, Text: "Nenhum clipe analisado"},
 					HSpacer{},
 				},
 			},
-			TableView{
-				AssignTo: &window.choiceTable, Model: window.choiceModel, CheckBoxes: true,
-				AlternatingRowBG: true, ColumnsSizable: true, MinSize: Size{Width: 850, Height: 280}, StretchFactor: 1,
-				Columns: []TableViewColumn{
-					{Title: "Demo", Width: 360},
-					{Title: "Mapa", Width: 105},
-					{Title: "Jogador", Width: 130},
-					{Title: "Tipo", Width: 250},
-					{Title: "Round", Width: 70, Alignment: AlignFar},
+			TabWidget{
+				StretchFactor: 1,
+				Pages: []TabPage{
+					{Title: "Melhores da partida", Layout: VBox{Spacing: 8}, Children: []Widget{
+						Label{Text: "Visão da organização: lances de maior valor para a narrativa da partida."},
+						TableView{AssignTo: &window.editorialTable, Model: window.editorialModel, AlternatingRowBG: true, ColumnsSizable: true, MinSize: Size{Width: 850, Height: 250}, StretchFactor: 1, Columns: clipTableColumns(), OnCurrentIndexChanged: window.updateSelectionStatus},
+						Composite{Layout: HBox{Spacing: 8}, Children: []Widget{PushButton{AssignTo: &window.addEditorial, Text: "Adicionar à seleção", Enabled: false, OnClicked: window.addEditorialChoice}, HSpacer{}}},
+					}},
+					{Title: "Por jogador", Layout: VBox{Spacing: 8}, Children: []Widget{
+						Composite{Layout: HBox{Spacing: 8}, Children: []Widget{Label{Text: "Jogador:"}, ComboBox{AssignTo: &window.playerCombo, Enabled: false, OnCurrentIndexChanged: window.playerChanged}, HSpacer{}}},
+						TableView{AssignTo: &window.playerTable, Model: window.playerModel, AlternatingRowBG: true, ColumnsSizable: true, MinSize: Size{Width: 850, Height: 250}, StretchFactor: 1, Columns: clipTableColumns(), OnCurrentIndexChanged: window.updateSelectionStatus},
+						Composite{Layout: HBox{Spacing: 8}, Children: []Widget{PushButton{AssignTo: &window.addPlayer, Text: "Adicionar à seleção", Enabled: false, OnClicked: window.addPlayerChoice}, HSpacer{}}},
+					}},
+					{Title: "Seleção final", Layout: VBox{Spacing: 8}, Children: []Widget{
+						Label{Text: "Somente estes clipes serão processados. Itens repetidos entre as duas visões aparecem uma vez."},
+						TableView{AssignTo: &window.finalTable, Model: window.finalModel, AlternatingRowBG: true, ColumnsSizable: true, MinSize: Size{Width: 850, Height: 250}, StretchFactor: 1, Columns: clipTableColumns(), OnCurrentIndexChanged: window.updateSelectionStatus},
+						Composite{Layout: HBox{Spacing: 8}, Children: []Widget{PushButton{AssignTo: &window.removeFinal, Text: "Remover da seleção", Enabled: false, OnClicked: window.removeFinalChoice}, HSpacer{}}},
+					}},
 				},
 			},
 			Label{Text: vacWarning},
 			Composite{
 				Layout: HBox{Spacing: 8},
 				Children: []Widget{
-					PushButton{AssignTo: &window.process, Text: "Processar selecionados", Enabled: false, MinSize: Size{Width: 180, Height: 36}, OnClicked: window.startProcessing},
+					PushButton{AssignTo: &window.process, Text: "Processar seleção final", Enabled: false, MinSize: Size{Width: 190, Height: 36}, OnClicked: window.startProcessing},
 					PushButton{AssignTo: &window.openOutput, Text: "Abrir pasta dos vídeos", MinSize: Size{Width: 165, Height: 36}, OnClicked: window.openOutputFolder},
 					HSpacer{},
 				},
@@ -204,6 +239,7 @@ func (window *applicationWindow) create(config Config) error {
 		}
 	}
 	window.mainWindow.Closing().Attach(window.onClosing)
+	window.updateSelectionStatus()
 	window.updateOpenOutput()
 	return nil
 }
@@ -244,7 +280,7 @@ func (window *applicationWindow) startAnalysis() {
 		return
 	}
 	if err := SaveConfig(window.configPath, Config{
-		CS2Path: values.CS2Path, InputDir: values.InputDir, OutputDir: values.OutputDir, HUDMode: window.hudMode(), HUDThemePath: window.hudThemePath(),
+		CS2Path: values.CS2Path, InputDir: values.InputDir, OutputDir: values.OutputDir, HUDMode: window.hudMode(), HUDThemePath: window.hudThemePath(), FavoriteSteamID: window.favoriteSteamID,
 	}); err != nil {
 		window.showError("Não foi possível salvar os caminhos", err)
 		return
@@ -253,7 +289,7 @@ func (window *applicationWindow) startAnalysis() {
 	analysisContext, cancel := context.WithCancel(window.rootContext)
 	window.cancelWork = cancel
 	window.analyzing = true
-	window.choiceModel.SetChoices(nil)
+	window.clearPreview()
 	window.setRunning(true)
 	window.appendStatus("Analisando demos e procurando highlights...")
 
@@ -261,9 +297,9 @@ func (window *applicationWindow) startAnalysis() {
 		results, err := cli.AnalyzeBatch(analysisContext, cli.Options{
 			Command: "analyze", InputDir: values.InputDir, OutputDir: values.OutputDir,
 		}, nil)
-		var choices []ClipChoice
+		var preview *PreviewState
 		if err == nil {
-			choices, err = ChoicesFromResults(results)
+			preview, err = NewPreviewState(results)
 		}
 		if window.mainWindow.IsDisposed() {
 			return
@@ -283,8 +319,10 @@ func (window *applicationWindow) startAnalysis() {
 				window.showError("Não foi possível analisar as demos", err)
 				return
 			}
-			window.choiceModel.SetChoices(choices)
-			window.appendStatus(fmt.Sprintf("Análise concluída: %d clipe(s) encontrado(s). Desmarque o que não deseja gerar.", len(choices)))
+			window.preview = preview
+			window.loadPlayers()
+			window.refreshCatalogViews()
+			window.appendStatus(fmt.Sprintf("Análise concluída: %d candidato(s) encontrado(s). Adicione à seleção final apenas o que deseja gerar.", len(preview.candidates)))
 		})
 	}()
 }
@@ -295,10 +333,14 @@ func (window *applicationWindow) startProcessing() {
 		window.showError("Verifique os caminhos", err)
 		return
 	}
-	choices := window.choiceModel.Choices()
-	selected := SelectedHighlights(choices)
-	if SelectedCount(choices) == 0 {
-		window.showError("Selecione os clipes", fmt.Errorf("marque pelo menos um clipe antes de processar"))
+	if window.preview == nil {
+		window.showError("Selecione os clipes", fmt.Errorf("analise as demos antes de processar"))
+		return
+	}
+	choices := window.preview.FinalChoices()
+	selected := window.preview.SelectedHighlights()
+	if len(choices) == 0 {
+		window.showError("Selecione os clipes", fmt.Errorf("adicione pelo menos um clipe à seleção final"))
 		return
 	}
 	bundle, err := ResolveBundle(window.executablePath)
@@ -317,7 +359,7 @@ func (window *applicationWindow) startProcessing() {
 		window.vacWarningSeen = true
 	}
 	if err := SaveConfig(window.configPath, Config{
-		CS2Path: values.CS2Path, InputDir: values.InputDir, OutputDir: values.OutputDir, HUDMode: window.hudMode(), HUDThemePath: window.hudThemePath(),
+		CS2Path: values.CS2Path, InputDir: values.InputDir, OutputDir: values.OutputDir, HUDMode: window.hudMode(), HUDThemePath: window.hudThemePath(), FavoriteSteamID: window.favoriteSteamID,
 	}); err != nil {
 		window.showError("Não foi possível salvar os caminhos", err)
 		return
@@ -326,7 +368,7 @@ func (window *applicationWindow) startProcessing() {
 	renderContext, cancel := context.WithCancel(window.rootContext)
 	window.cancelWork = cancel
 	window.setRunning(true)
-	window.appendStatus(fmt.Sprintf("Iniciando processamento de %d clipe(s) selecionado(s)...", SelectedCount(choices)))
+	window.appendStatus(fmt.Sprintf("Iniciando processamento de %d clipe(s) na seleção final...", len(choices)))
 	err = window.controller.Start(renderContext, StartRequest{Values: values, Bundle: bundle, SelectedHighlights: selected, HUDMode: window.hudMode(), HUDThemePath: window.hudThemePath()}, window.report)
 	if err != nil {
 		cancel()
@@ -355,13 +397,14 @@ func (window *applicationWindow) report(event Event) {
 }
 
 func (window *applicationWindow) setRunning(running bool) {
-	for _, control := range []walk.Widget{window.cs2Edit, window.inputEdit, window.outputEdit, window.cs2Browse, window.inputBrowse, window.outputBrowse, window.analyze, window.choiceTable, window.gameHUD, window.customHUD} {
+	for _, control := range []walk.Widget{window.cs2Edit, window.inputEdit, window.outputEdit, window.cs2Browse, window.inputBrowse, window.outputBrowse, window.analyze, window.editorialTable, window.playerTable, window.finalTable, window.breadthCombo, window.playerCombo, window.gameHUD, window.customHUD} {
 		control.SetEnabled(!running)
 	}
 	if running {
 		window.process.SetEnabled(false)
-		window.selectAll.SetEnabled(false)
-		window.selectNone.SetEnabled(false)
+		window.addEditorial.SetEnabled(false)
+		window.addPlayer.SetEnabled(false)
+		window.removeFinal.SetEnabled(false)
 		window.openOutput.SetEnabled(false)
 	} else {
 		window.updateSelectionStatus()
@@ -524,29 +567,148 @@ func (window *applicationWindow) formValues() FormValues {
 }
 
 func (window *applicationWindow) invalidatePreview() {
-	if window.choiceModel == nil || window.analyzing || window.controller.IsRunning() {
+	if window.preview == nil || window.analyzing || window.controller.IsRunning() {
 		return
 	}
-	if window.choiceModel.RowCount() > 0 {
-		window.choiceModel.SetChoices(nil)
-	}
+	window.clearPreview()
 }
 
 func (window *applicationWindow) updateSelectionStatus() {
-	if window.choiceModel == nil || window.selection == nil {
+	if window.editorialModel == nil || window.selection == nil {
 		return
 	}
-	total := window.choiceModel.RowCount()
-	selected := SelectedCount(window.choiceModel.Choices())
-	if total == 0 {
+	total := window.editorialModel.RowCount() + window.playerModel.RowCount()
+	selected := window.finalModel.RowCount()
+	if window.preview == nil {
 		window.selection.SetText("Nenhum clipe analisado")
 	} else {
-		window.selection.SetText(fmt.Sprintf("%d de %d clipe(s) marcado(s)", selected, total))
+		window.selection.SetText(fmt.Sprintf("%d clipe(s) na seleção final · %d resultado(s) visível(is)", selected, total))
 	}
 	working := window.analyzing || window.controller.IsRunning()
-	window.selectAll.SetEnabled(!working && total > 0)
-	window.selectNone.SetEnabled(!working && total > 0)
+	window.breadthCombo.SetEnabled(!working && window.preview != nil)
+	window.playerCombo.SetEnabled(!working && len(window.players) > 0)
+	window.addEditorial.SetEnabled(!working && window.editorialTable.CurrentIndex() >= 0)
+	window.addPlayer.SetEnabled(!working && window.playerTable.CurrentIndex() >= 0)
+	window.removeFinal.SetEnabled(!working && window.finalTable.CurrentIndex() >= 0)
 	window.process.SetEnabled(!working && selected > 0)
+}
+
+func (window *applicationWindow) currentBreadth() highlights.Breadth {
+	if window.breadthCombo == nil {
+		return highlights.BreadthBalanced
+	}
+	switch window.breadthCombo.CurrentIndex() {
+	case 0:
+		return highlights.BreadthRestricted
+	case 2:
+		return highlights.BreadthBroad
+	default:
+		return highlights.BreadthBalanced
+	}
+}
+
+func (window *applicationWindow) loadPlayers() {
+	window.players = window.preview.Players()
+	labels := make([]string, 0, len(window.players))
+	for _, player := range window.players {
+		label := player.Name
+		if player.TeamName != "" {
+			label += " — " + player.TeamName
+		}
+		labels = append(labels, label)
+	}
+	_ = window.playerCombo.SetModel(labels)
+	preferred := window.preview.PreferredPlayer(window.favoriteSteamID)
+	index := -1
+	for playerIndex, player := range window.players {
+		if player.SteamID == preferred {
+			index = playerIndex
+			break
+		}
+	}
+	window.playerCombo.SetCurrentIndex(index)
+}
+
+func (window *applicationWindow) selectedPlayerSteamID() uint64 {
+	if window.playerCombo == nil {
+		return 0
+	}
+	index := window.playerCombo.CurrentIndex()
+	if index < 0 || index >= len(window.players) {
+		return 0
+	}
+	return window.players[index].SteamID
+}
+
+func (window *applicationWindow) playerChanged() {
+	steamID := window.selectedPlayerSteamID()
+	if steamID != 0 {
+		window.favoriteSteamID = steamID
+		values := window.formValues()
+		if err := SaveConfig(window.configPath, Config{
+			CS2Path: values.CS2Path, InputDir: values.InputDir, OutputDir: values.OutputDir, HUDMode: window.hudMode(), HUDThemePath: window.hudThemePath(), FavoriteSteamID: window.favoriteSteamID,
+		}); err != nil {
+			window.appendStatus("Aviso: não foi possível salvar o jogador favorito: " + err.Error())
+		}
+	}
+	window.refreshCatalogViews()
+}
+
+func (window *applicationWindow) refreshCatalogViews() {
+	if window.preview == nil {
+		return
+	}
+	window.editorialModel.SetChoices(window.preview.EditorialChoices(window.currentBreadth()))
+	window.playerModel.SetChoices(window.preview.PlayerChoices(window.currentBreadth(), window.selectedPlayerSteamID()))
+	window.finalModel.SetChoices(window.preview.FinalChoices())
+	window.updateSelectionStatus()
+}
+
+func (window *applicationWindow) addEditorialChoice() {
+	window.addChoice(window.editorialModel, window.editorialTable)
+}
+
+func (window *applicationWindow) addPlayerChoice() {
+	window.addChoice(window.playerModel, window.playerTable)
+}
+
+func (window *applicationWindow) addChoice(model *choiceTableModel, table *walk.TableView) {
+	if window.preview == nil {
+		return
+	}
+	choice, ok := model.Choice(table.CurrentIndex())
+	if !ok {
+		return
+	}
+	window.preview.Add(choice)
+	window.finalModel.SetChoices(window.preview.FinalChoices())
+	window.updateSelectionStatus()
+}
+
+func (window *applicationWindow) removeFinalChoice() {
+	if window.preview == nil {
+		return
+	}
+	choice, ok := window.finalModel.Choice(window.finalTable.CurrentIndex())
+	if !ok {
+		return
+	}
+	window.preview.Remove(choice.DemoPath, choice.ID)
+	window.finalModel.SetChoices(window.preview.FinalChoices())
+	window.updateSelectionStatus()
+}
+
+func (window *applicationWindow) clearPreview() {
+	window.preview = nil
+	window.players = nil
+	window.editorialModel.SetChoices(nil)
+	window.playerModel.SetChoices(nil)
+	window.finalModel.SetChoices(nil)
+	if window.playerCombo != nil {
+		_ = window.playerCombo.SetModel([]string{})
+		window.playerCombo.SetCurrentIndex(-1)
+	}
+	window.updateSelectionStatus()
 }
 
 func (window *applicationWindow) updateOpenOutput() {

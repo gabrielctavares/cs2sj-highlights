@@ -6,12 +6,11 @@ import "github.com/lxn/walk"
 
 type choiceTableModel struct {
 	walk.TableModelBase
-	items     []ClipChoice
-	onChanged func()
+	items []ClipChoice
 }
 
-func newChoiceTableModel(onChanged func()) *choiceTableModel {
-	return &choiceTableModel{onChanged: onChanged}
+func newChoiceTableModel() *choiceTableModel {
+	return &choiceTableModel{}
 }
 
 func (model *choiceTableModel) RowCount() int {
@@ -31,41 +30,27 @@ func (model *choiceTableModel) Value(row, column int) interface{} {
 		return item.Type
 	case 4:
 		return item.Round
+	case 5:
+		return item.Score
+	case 6:
+		return item.Explanation
 	default:
 		return ""
 	}
 }
 
-func (model *choiceTableModel) Checked(row int) bool {
-	return model.items[row].Selected
-}
-
-func (model *choiceTableModel) SetChecked(row int, checked bool) error {
-	model.items[row].Selected = checked
-	if model.onChanged != nil {
-		model.onChanged()
-	}
-	return nil
-}
-
 func (model *choiceTableModel) SetChoices(choices []ClipChoice) {
 	model.items = append(model.items[:0], choices...)
 	model.PublishRowsReset()
-	if model.onChanged != nil {
-		model.onChanged()
-	}
-}
-
-func (model *choiceTableModel) SetAll(selected bool) {
-	for index := range model.items {
-		model.items[index].Selected = selected
-	}
-	model.PublishRowsReset()
-	if model.onChanged != nil {
-		model.onChanged()
-	}
 }
 
 func (model *choiceTableModel) Choices() []ClipChoice {
 	return append([]ClipChoice(nil), model.items...)
+}
+
+func (model *choiceTableModel) Choice(row int) (ClipChoice, bool) {
+	if row < 0 || row >= len(model.items) {
+		return ClipChoice{}, false
+	}
+	return model.items[row], true
 }
