@@ -62,9 +62,14 @@ func RunThemeEditor(owner walk.Form, path string) error {
 	if err != nil {
 		return err
 	}
+	ApplyGuidedLayout(&theme)
 	editor := &themeEditorWindow{path: path, state: NewEditorState(theme)}
 	_, err = (Dialog{AssignTo: &editor.dialog, Title: "Editor visual de HUD — 16:9", MinSize: Size{Width: 1180, Height: 720}, Layout: HBox{Margins: Margins{Left: 12, Top: 12, Right: 12, Bottom: 12}, Spacing: 10}, Children: []Widget{
 		Composite{MinSize: Size{Width: 200}, Layout: VBox{Spacing: 6}, Children: []Widget{
+			Label{Text: "Cores dos times"},
+			PushButton{Text: "Azul × Laranja", OnClicked: func() { editor.applyPalette(TeamBlue, TeamOrange) }},
+			PushButton{Text: "Vermelho × Verde", OnClicked: func() { editor.applyPalette(TeamRed, TeamGreen) }},
+			PushButton{Text: "Roxo × Azul", OnClicked: func() { editor.applyPalette(TeamPurple, TeamBlue) }},
 			Label{Text: "Camadas"}, ListBox{AssignTo: &editor.layers, Model: editor.layerNames(), StretchFactor: 1, OnCurrentIndexChanged: editor.selectLayer},
 			PushButton{Text: "+ Caixa", OnClicked: func() { editor.add(hudtheme.Box) }}, PushButton{Text: "+ Texto", OnClicked: func() { editor.add(hudtheme.Text) }}, PushButton{Text: "+ Imagem", OnClicked: editor.addImage}, PushButton{Text: "Subir camada", OnClicked: func() { editor.moveLayer(1) }}, PushButton{Text: "Descer camada", OnClicked: func() { editor.moveLayer(-1) }}, PushButton{Text: "Remover", OnClicked: editor.remove},
 		}},
@@ -114,6 +119,10 @@ func (editor *themeEditorWindow) add(kind hudtheme.ElementType) {
 	if editor.state.AddElement(kind) == nil {
 		editor.refresh()
 	}
+}
+func (editor *themeEditorWindow) applyPalette(a, b TeamPalette) {
+	ApplyPalette(&editor.state.Theme, a, b)
+	editor.refresh()
 }
 func (editor *themeEditorWindow) moveLayer(direction int) {
 	if editor.state.MoveLayer(direction) == nil {
