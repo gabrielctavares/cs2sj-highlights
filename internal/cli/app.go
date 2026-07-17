@@ -13,6 +13,7 @@ import (
 
 	"github.com/gabrielctavares/cs2sj-highlights/internal/demos"
 	"github.com/gabrielctavares/cs2sj-highlights/internal/highlights"
+	"github.com/gabrielctavares/cs2sj-highlights/internal/hudtheme"
 	"github.com/gabrielctavares/cs2sj-highlights/internal/media"
 	"github.com/gabrielctavares/cs2sj-highlights/internal/model"
 	"github.com/gabrielctavares/cs2sj-highlights/internal/pipeline"
@@ -32,6 +33,7 @@ type Options struct {
 	FFmpegPath         string
 	FFprobePath        string
 	HUDLogoPath        string
+	HUDThemePath       string
 	HUDMode            model.HUDMode
 	SelectedHighlights map[string][]string
 }
@@ -66,6 +68,7 @@ func ParseArgs(args []string) (Options, error) {
 		flags.StringVar(&options.FFmpegPath, "ffmpeg", "", "caminho para ffmpeg.exe")
 		flags.StringVar(&options.FFprobePath, "ffprobe", "", "caminho para ffprobe.exe")
 		flags.StringVar(&hudMode, "hud", string(model.HUDNone), "none, game ou custom")
+		flags.StringVar(&options.HUDThemePath, "hud-theme", "", "caminho para o hud.json externo")
 	}
 	if err := flags.Parse(args[2:]); err != nil {
 		if errors.Is(err, flag.ErrHelp) {
@@ -83,13 +86,16 @@ func ParseArgs(args []string) (Options, error) {
 	if command == "render" && !options.HUDMode.Valid() {
 		return Options{}, fmt.Errorf("--hud deve ser none, game ou custom")
 	}
+	if command == "render" && options.HUDThemePath != "" && options.HUDMode != model.HUDCustom {
+		return Options{}, fmt.Errorf("--hud-theme requer --hud custom")
+	}
 	return options, nil
 }
 
 func Usage() string {
 	return "Uso:\n" +
 		"  cs2-highlights analyze INPUT_DIR --output OUTPUT_DIR\n" +
-		"  cs2-highlights render  INPUT_DIR --output OUTPUT_DIR [--hud none|game|custom] [--hlae HLAE_EXE] [--cs2 CS2_EXE] [--hook-dll HOOK_DLL] [--ffmpeg FFMPEG_EXE] [--ffprobe FFPROBE_EXE]\n"
+		"  cs2-highlights render  INPUT_DIR --output OUTPUT_DIR [--hud none|game|custom] [--hud-theme HUD_JSON] [--hlae HLAE_EXE] [--cs2 CS2_EXE] [--hook-dll HOOK_DLL] [--ffmpeg FFMPEG_EXE] [--ffprobe FFPROBE_EXE]\n"
 }
 
 func (app App) Run(ctx context.Context, args []string, stdout, stderr io.Writer) int {
@@ -172,13 +178,23 @@ func RenderBatch(ctx context.Context, options Options, logger *slog.Logger) ([]p
 	if err != nil {
 		return nil, err
 	}
+	var theme *hudtheme.Theme
+	themeDir := ""
+	if options.HUDThemePath != "" {
+		loaded, loadErr := hudtheme.Load(options.HUDThemePath)
+		if loadErr != nil {
+			return nil, fmt.Errorf("carregar HUD externo: %w", loadErr)
+		}
+		theme = &loaded
+		themeDir = filepath.Dir(options.HUDThemePath)
+	}
 	prober := media.Prober{Path: paths.FFprobePath}
 	worker := &pipeline.Pipeline{
 		OutputDir: paths.OutputDir,
 		HUDMode:   options.HUDMode,
 		Parser:    demos.DemoParser{},
 		Capturer:  render.Runner{HLAEPath: paths.HLAEPath, HookDLL: paths.HookDLLPath, CS2Path: paths.CS2Path, Probe: prober.Probe, Guard: render.SteamConfigGuard{}, HUDMode: options.HUDMode, Logger: logger},
-		Clips:     media.ClipBuilder{FFmpegPath: paths.FFmpegPath, FontPath: paths.FontPath, LogoPath: options.HUDLogoPath, Probe: prober.Probe, HUDMode: options.HUDMode, Logger: logger},
+		Clips:     media.ClipBuilder{FFmpegPath: paths.FFmpegPath, FontPath: paths.FontPath, LogoPath: options.HUDLogoPath, Theme: theme, ThemeDir: themeDir, Probe: prober.Probe, HUDMode: options.HUDMode, Logger: logger},
 		// Summary: media.SummaryBuilder{FFmpegPath: paths.FFmpegPath, Probe: prober.Probe}, // temporariamente desabilitado
 		Logger: logger,
 	}

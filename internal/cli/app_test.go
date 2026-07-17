@@ -4,6 +4,7 @@ import (
 	"bytes"
 	"context"
 	"errors"
+	"reflect"
 	"strings"
 	"testing"
 
@@ -18,6 +19,17 @@ func TestParseRenderAcceptsInputBeforeFlags(t *testing.T) {
 	}
 	if got.Command != "render" || got.InputDir != `C:\demos` || got.OutputDir != `C:\videos` || got.HLAEPath != `C:\HLAE\HLAE.exe` || got.HUDMode != model.HUDCustom {
 		t.Fatalf("unexpected args: %#v", got)
+	}
+}
+
+func TestParseRenderAcceptsExternalHUDTheme(t *testing.T) {
+	got, err := ParseArgs([]string{"render", `C:\demos`, "--output", `C:\videos`, "--hud", "custom", "--hud-theme", `D:\themes\final\hud.json`})
+	if err != nil {
+		t.Fatal(err)
+	}
+	field := reflect.ValueOf(got).FieldByName("HUDThemePath")
+	if !field.IsValid() || field.String() != `D:\themes\final\hud.json` {
+		t.Fatalf("HUD theme path was not parsed: %#v", got)
 	}
 }
 

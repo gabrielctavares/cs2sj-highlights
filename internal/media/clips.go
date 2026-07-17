@@ -9,6 +9,7 @@ import (
 	"strconv"
 	"strings"
 
+	"github.com/gabrielctavares/cs2sj-highlights/internal/hudtheme"
 	"github.com/gabrielctavares/cs2sj-highlights/internal/model"
 	"github.com/gabrielctavares/cs2sj-highlights/internal/subprocess"
 )
@@ -17,6 +18,8 @@ type ClipBuilder struct {
 	FFmpegPath string
 	FontPath   string
 	LogoPath   string
+	Theme      *hudtheme.Theme
+	ThemeDir   string
 	Run        CommandRunner
 	Probe      func(context.Context, string) (ProbeResult, error)
 	HUDMode    model.HUDMode
@@ -118,7 +121,7 @@ func (builder ClipBuilder) Build(ctx context.Context, highlight model.Highlight)
 		}
 	}
 	customHUD := builder.HUDMode == model.HUDCustom
-	useLogo := customHUD && strings.TrimSpace(builder.LogoPath) != ""
+	useLogo := customHUD && builder.Theme == nil && strings.TrimSpace(builder.LogoPath) != ""
 	if useLogo {
 		info, statErr := os.Stat(builder.LogoPath)
 		if statErr != nil || !info.Mode().IsRegular() {
@@ -194,6 +197,18 @@ func (builder ClipBuilder) Build(ctx context.Context, highlight model.Highlight)
 			filter += ";[hud]null[v]"
 		}
 	}
+	var themeInputs []string
+	if customHUD && builder.Theme != nil {
+		if strings.TrimSpace(builder.ThemeDir) == "" {
+			return model.OutputPaths{}, fmt.Errorf("HUD theme directory is not configured")
+		}
+		plan, themeErr := BuildHUDFilter(*builder.Theme, builder.ThemeDir, hudtheme.ValuesFor(highlight), builder.FontPath)
+		if themeErr != nil {
+			return model.OutputPaths{}, fmt.Errorf("build HUD theme %q: %w", builder.Theme.Name, themeErr)
+		}
+		filter = plan.Filter
+		themeInputs = plan.Inputs
+	}
 	if err := os.WriteFile(filterPath, []byte(filter), 0o600); err != nil {
 		return model.OutputPaths{}, fmt.Errorf("write filter file %q: %w", filterPath, err)
 	}
@@ -213,6 +228,9 @@ func (builder ClipBuilder) Build(ctx context.Context, highlight model.Highlight)
 
 	horizontalPartial := partialPath(highlight.Outputs.Horizontal)
 	horizontalArgs := []string{"-y", "-i", highlight.MasterPath}
+	for _, input := range themeInputs {
+		horizontalArgs = append(horizontalArgs, "-i", input)
+	}
 	if highlight.MasterAudioPath != "" {
 		videoProbe, probeErr := builder.Probe(ctx, highlight.MasterPath)
 		if probeErr != nil {
@@ -227,7 +245,7 @@ func (builder ClipBuilder) Build(ctx context.Context, highlight model.Highlight)
 			horizontalArgs = append(horizontalArgs, "-ss", fmt.Sprintf("%.6f", audioStartTrim))
 		}
 		horizontalArgs = append(horizontalArgs, "-i", highlight.MasterAudioPath)
-		audioMap = "1:a:0"
+		audioMap = fmt.Sprintf("%d:a:0", 1+len(themeInputs))
 	}
 	if useLogo {
 		horizontalArgs = append(horizontalArgs, "-i", builder.LogoPath)

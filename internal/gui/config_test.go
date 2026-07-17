@@ -27,7 +27,7 @@ func TestLoadConfigAbsentReturnsDefaults(t *testing.T) {
 
 func TestSaveAndLoadConfig(t *testing.T) {
 	path := filepath.Join(t.TempDir(), "nested", "config.json")
-	want := Config{SchemaVersion: 1, CS2Path: `C:\cs2.exe`, InputDir: `C:\demos`, OutputDir: `D:\videos`, HUDMode: model.HUDCustom}
+	want := Config{SchemaVersion: 1, CS2Path: `C:\cs2.exe`, InputDir: `C:\demos`, OutputDir: `D:\videos`, HUDMode: model.HUDCustom, HUDThemePath: `D:\themes\final\hud.json`}
 	if err := SaveConfig(path, want); err != nil {
 		t.Fatal(err)
 	}

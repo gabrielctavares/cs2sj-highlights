@@ -10,6 +10,7 @@ import (
 	"strings"
 	"testing"
 
+	"github.com/gabrielctavares/cs2sj-highlights/internal/hudtheme"
 	"github.com/gabrielctavares/cs2sj-highlights/internal/model"
 )
 
@@ -137,6 +138,45 @@ func TestClipBuilderBuildsHorizontalOnly(t *testing.T) {
 		if _, err := os.Stat(filepath.Join(filepath.Dir(got.Horizontal), highlight.ID+suffix)); !errors.Is(err, os.ErrNotExist) {
 			t.Fatalf("temporary file leaked: %v", err)
 		}
+	}
+}
+
+func TestClipBuilderUsesSelectedExternalTheme(t *testing.T) {
+	highlight := clipFixture(t, false)
+	themeDir := t.TempDir()
+	logoPath := filepath.Join(themeDir, "team-a.png")
+	if err := os.WriteFile(logoPath, []byte("image"), 0o600); err != nil {
+		t.Fatal(err)
+	}
+	theme := hudtheme.Theme{Version: 1, Name: "Campeonato", Elements: []hudtheme.Element{
+		{ID: "event", Type: hudtheme.Text, Anchor: hudtheme.TopCenter, Width: 40, Height: 5, Visible: true, Binding: hudtheme.Event, FontSize: 24, Color: "#FFFFFF"},
+		{ID: "logo", Type: hudtheme.Image, Anchor: hudtheme.TopLeft, Width: 5, Height: 8, Visible: true, Asset: "team-a.png"},
+	}}
+	var args []string
+	var filter string
+	builder := ClipBuilder{FFmpegPath: "ffmpeg", FontPath: `C:\font.ttf`, HUDMode: model.HUDCustom, Theme: &theme, ThemeDir: themeDir,
+		Run: func(_ context.Context, _ string, values ...string) ([]byte, error) {
+			args = slices.Clone(values)
+			index := slices.Index(values, "-/filter_complex")
+			data, err := os.ReadFile(values[index+1])
+			filter = string(data)
+			if err != nil {
+				return nil, err
+			}
+			return nil, os.WriteFile(values[len(values)-1], []byte("mp4"), 0o600)
+		},
+		Probe: func(context.Context, string) (ProbeResult, error) {
+			return ProbeResult{Duration: 1, Width: 1920, Height: 1080, VideoCodec: "h264", AudioCodec: "aac", HasAudio: true}, nil
+		},
+	}
+	if _, err := builder.Build(context.Background(), highlight); err != nil {
+		t.Fatal(err)
+	}
+	if !strings.Contains(filter, "text='CS2 SJ'") || !strings.Contains(filter, "overlay=") {
+		t.Fatalf("external theme was not compiled: %s", filter)
+	}
+	if !slices.Contains(args, logoPath) {
+		t.Fatalf("theme asset input missing: %#v", args)
 	}
 }
 
@@ -302,6 +342,50 @@ func TestClipBuilderRealFFmpeg(t *testing.T) {
 	}
 	if outputs.Vertical != "" {
 		t.Fatalf("vertical output must remain disabled: %#v", outputs)
+	}
+}
+
+func TestClipBuilderRealFFmpegWithExternalTheme(t *testing.T) {
+	ffmpeg, err := exec.LookPath("ffmpeg")
+	if err != nil {
+		t.Skip("ffmpeg not on PATH")
+	}
+	ffprobe, err := exec.LookPath("ffprobe")
+	if err != nil {
+		t.Skip("ffprobe not on PATH")
+	}
+	font := `C:\Windows\Fonts\segoeuib.ttf`
+	if _, err := os.Stat(font); err != nil {
+		t.Skip("Segoe UI Bold font unavailable")
+	}
+	highlight := clipFixture(t, false)
+	highlight.HUD = model.HUDMetadata{Event: "FINAL CS2SJ"}
+	themeDir := t.TempDir()
+	logoPath := filepath.Join(themeDir, "team-a.png")
+	if output, err := exec.Command(ffmpeg, "-y", "-f", "lavfi", "-i", "color=c=red:s=80x80", "-frames:v", "1", logoPath).CombinedOutput(); err != nil {
+		t.Fatalf("generate logo fixture: %v: %s", err, output)
+	}
+	command := exec.Command(ffmpeg, "-y", "-f", "lavfi", "-i", "color=c=blue:s=1920x1080:d=1:r=30", "-f", "lavfi", "-i", "sine=frequency=1000:duration=1", "-c:v", "libx264", "-pix_fmt", "yuv420p", "-c:a", "aac", "-shortest", highlight.MasterPath)
+	if output, err := command.CombinedOutput(); err != nil {
+		t.Fatalf("generate fixture: %v: %s", err, output)
+	}
+	theme := hudtheme.Theme{Version: 1, Name: "E2E", Elements: []hudtheme.Element{
+		{ID: "bar", Type: hudtheme.Box, Anchor: hudtheme.TopLeft, Width: 100, Height: 8, Visible: true, Color: "#101820", Opacity: 0.9},
+		{ID: "event", Type: hudtheme.Text, Anchor: hudtheme.TopCenter, X: 25, Y: 1, Width: 50, Height: 5, ZIndex: 1, Visible: true, Binding: hudtheme.Event, FontSize: 28, Color: "#FFFFFF"},
+		{ID: "team-a-logo", Type: hudtheme.Image, Anchor: hudtheme.TopLeft, X: 2, Y: 1, Width: 5, Height: 5, ZIndex: 2, Visible: true, Asset: "team-a.png"},
+	}}
+	prober := Prober{Path: ffprobe}
+	builder := ClipBuilder{FFmpegPath: ffmpeg, FontPath: font, Theme: &theme, ThemeDir: themeDir, HUDMode: model.HUDCustom, Probe: prober.Probe}
+	outputs, err := builder.Build(context.Background(), highlight)
+	if err != nil {
+		t.Fatal(err)
+	}
+	probe, err := prober.Probe(context.Background(), outputs.Horizontal)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if err := ValidateFinal(probe, 1920, 1080); err != nil {
+		t.Fatal(err)
 	}
 }
 

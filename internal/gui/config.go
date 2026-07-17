@@ -19,6 +19,7 @@ type Config struct {
 	InputDir      string        `json:"input_dir"`
 	OutputDir     string        `json:"output_dir"`
 	HUDMode       model.HUDMode `json:"hud_mode,omitempty"`
+	HUDThemePath  string        `json:"hud_theme_path,omitempty"`
 }
 
 func ConfigPath(localAppData string) string {

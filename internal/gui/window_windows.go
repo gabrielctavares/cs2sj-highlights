@@ -4,6 +4,7 @@ package gui
 
 import (
 	"context"
+	"encoding/json"
 	"fmt"
 	"os"
 	"os/exec"
@@ -11,6 +12,7 @@ import (
 	"strings"
 
 	"github.com/gabrielctavares/cs2sj-highlights/internal/cli"
+	"github.com/gabrielctavares/cs2sj-highlights/internal/hudtheme"
 	"github.com/gabrielctavares/cs2sj-highlights/internal/model"
 	"github.com/gabrielctavares/cs2sj-highlights/internal/preflight"
 
@@ -32,23 +34,26 @@ type applicationWindow struct {
 	updatingHUD     bool
 	applicationIcon *walk.Icon
 
-	mainWindow   *walk.MainWindow
-	cs2Edit      *walk.LineEdit
-	inputEdit    *walk.LineEdit
-	outputEdit   *walk.LineEdit
-	statusEdit   *walk.TextEdit
-	choiceTable  *walk.TableView
-	cs2Browse    *walk.PushButton
-	inputBrowse  *walk.PushButton
-	outputBrowse *walk.PushButton
-	analyze      *walk.PushButton
-	selectAll    *walk.PushButton
-	selectNone   *walk.PushButton
-	selection    *walk.Label
-	process      *walk.PushButton
-	openOutput   *walk.PushButton
-	gameHUD      *walk.CheckBox
-	customHUD    *walk.CheckBox
+	mainWindow     *walk.MainWindow
+	cs2Edit        *walk.LineEdit
+	inputEdit      *walk.LineEdit
+	outputEdit     *walk.LineEdit
+	hudThemeEdit   *walk.LineEdit
+	statusEdit     *walk.TextEdit
+	choiceTable    *walk.TableView
+	cs2Browse      *walk.PushButton
+	inputBrowse    *walk.PushButton
+	outputBrowse   *walk.PushButton
+	analyze        *walk.PushButton
+	selectAll      *walk.PushButton
+	selectNone     *walk.PushButton
+	selection      *walk.Label
+	process        *walk.PushButton
+	openOutput     *walk.PushButton
+	gameHUD        *walk.CheckBox
+	customHUD      *walk.CheckBox
+	hudThemeBrowse *walk.PushButton
+	hudEditor      *walk.PushButton
 }
 
 func Run(ctx context.Context, executablePath, localAppData string) error {
@@ -142,12 +147,16 @@ func (window *applicationWindow) create(config Config) error {
 				},
 			},
 			Composite{
-				Layout: HBox{Spacing: 16},
+				Layout: Grid{Columns: 4, Spacing: 8},
 				Children: []Widget{
 					Label{Text: "HUD do vídeo:"},
 					CheckBox{AssignTo: &window.gameHUD, Text: "Mostrar HUD do jogo", Checked: config.HUDMode == model.HUDGame, OnCheckedChanged: window.gameHUDChanged},
 					CheckBox{AssignTo: &window.customHUD, Text: "Usar HUD personalizada", Checked: config.HUDMode == model.HUDCustom, OnCheckedChanged: window.customHUDChanged},
 					HSpacer{},
+					Label{Text: "Tema externo (hud.json)"},
+					LineEdit{AssignTo: &window.hudThemeEdit, Text: config.HUDThemePath, StretchFactor: 1},
+					PushButton{AssignTo: &window.hudThemeBrowse, Text: "Selecionar", OnClicked: window.browseHUDTheme},
+					PushButton{AssignTo: &window.hudEditor, Text: "Editor visual", OnClicked: window.openHUDThemeEditor},
 				},
 			},
 			Composite{
@@ -235,7 +244,7 @@ func (window *applicationWindow) startAnalysis() {
 		return
 	}
 	if err := SaveConfig(window.configPath, Config{
-		CS2Path: values.CS2Path, InputDir: values.InputDir, OutputDir: values.OutputDir, HUDMode: window.hudMode(),
+		CS2Path: values.CS2Path, InputDir: values.InputDir, OutputDir: values.OutputDir, HUDMode: window.hudMode(), HUDThemePath: window.hudThemePath(),
 	}); err != nil {
 		window.showError("Não foi possível salvar os caminhos", err)
 		return
@@ -308,7 +317,7 @@ func (window *applicationWindow) startProcessing() {
 		window.vacWarningSeen = true
 	}
 	if err := SaveConfig(window.configPath, Config{
-		CS2Path: values.CS2Path, InputDir: values.InputDir, OutputDir: values.OutputDir, HUDMode: window.hudMode(),
+		CS2Path: values.CS2Path, InputDir: values.InputDir, OutputDir: values.OutputDir, HUDMode: window.hudMode(), HUDThemePath: window.hudThemePath(),
 	}); err != nil {
 		window.showError("Não foi possível salvar os caminhos", err)
 		return
@@ -318,7 +327,7 @@ func (window *applicationWindow) startProcessing() {
 	window.cancelWork = cancel
 	window.setRunning(true)
 	window.appendStatus(fmt.Sprintf("Iniciando processamento de %d clipe(s) selecionado(s)...", SelectedCount(choices)))
-	err = window.controller.Start(renderContext, StartRequest{Values: values, Bundle: bundle, SelectedHighlights: selected, HUDMode: window.hudMode()}, window.report)
+	err = window.controller.Start(renderContext, StartRequest{Values: values, Bundle: bundle, SelectedHighlights: selected, HUDMode: window.hudMode(), HUDThemePath: window.hudThemePath()}, window.report)
 	if err != nil {
 		cancel()
 		window.cancelWork = nil
@@ -372,6 +381,120 @@ func HUDModeFromChecks(game, custom bool) model.HUDMode {
 
 func (window *applicationWindow) hudMode() model.HUDMode {
 	return HUDModeFromChecks(window.gameHUD != nil && window.gameHUD.Checked(), window.customHUD != nil && window.customHUD.Checked())
+}
+
+func (window *applicationWindow) hudThemePath() string {
+	if window.hudThemeEdit == nil {
+		return ""
+	}
+	return strings.TrimSpace(window.hudThemeEdit.Text())
+}
+
+func (window *applicationWindow) browseHUDTheme() {
+	dialog := new(walk.FileDialog)
+	dialog.Title = "Selecione o hud.json"
+	dialog.Filter = "Tema de HUD (hud.json)|hud.json|JSON (*.json)|*.json"
+	dialog.FilePath = window.hudThemePath()
+	accepted, err := dialog.ShowOpen(window.mainWindow)
+	if err != nil {
+		window.showError("NÃ£o foi possÃ­vel selecionar o tema", err)
+		return
+	}
+	if accepted {
+		window.hudThemeEdit.SetText(dialog.FilePath)
+		window.customHUD.SetChecked(true)
+	}
+}
+
+// openHUDThemeEditor keeps the editable theme in its own folder. The JSON is
+// deliberately shown in the native screen as an escape hatch for every theme
+// property while the 16:9 editor evolves.
+func (window *applicationWindow) openHUDThemeEditor() {
+	path := window.hudThemePath()
+	if path == "" {
+		var err error
+		path, err = CreateHUDTheme(filepath.Join(filepath.Dir(window.configPath), "themes"), "Meu HUD")
+		if err != nil {
+			window.showError("NÃ£o foi possÃ­vel criar o tema", err)
+			return
+		}
+		window.hudThemeEdit.SetText(path)
+		window.customHUD.SetChecked(true)
+	}
+	theme, err := hudtheme.Load(path)
+	if err != nil {
+		window.showError("NÃ£o foi possÃ­vel abrir o tema", err)
+		return
+	}
+	data, err := json.MarshalIndent(theme, "", "  ")
+	if err != nil {
+		window.showError("NÃ£o foi possÃ­vel preparar o tema", err)
+		return
+	}
+	var dialog *walk.Dialog
+	var editor *walk.TextEdit
+	var save *walk.PushButton
+	if _, err = (Dialog{AssignTo: &dialog, Title: "Editor de HUD 16:9", MinSize: Size{Width: 760, Height: 620}, Layout: VBox{Margins: Margins{Left: 12, Top: 12, Right: 12, Bottom: 12}, Spacing: 8}, Children: []Widget{
+		Label{Text: "Tema externo: " + path},
+		Label{Text: "Use elementos box, text e image em porcentagens do quadro 16:9. Assets ficam na mesma pasta do hud.json."},
+		CustomWidget{MinSize: Size{Width: 640, Height: 300}, Paint: paintHUDThemePreview(theme), PaintMode: PaintBuffered},
+		TextEdit{AssignTo: &editor, Text: string(data), VScroll: true, HScroll: true, StretchFactor: 1},
+		Composite{Layout: HBox{Spacing: 8}, Children: []Widget{
+			HSpacer{},
+			PushButton{AssignTo: &save, Text: "Salvar tema", OnClicked: func() {
+				var updated hudtheme.Theme
+				if decodeErr := json.Unmarshal([]byte(editor.Text()), &updated); decodeErr != nil {
+					walk.MsgBox(dialog, "Tema invÃ¡lido", decodeErr.Error(), walk.MsgBoxOK|walk.MsgBoxIconError)
+					return
+				}
+				if saveErr := hudtheme.Save(path, updated); saveErr != nil {
+					walk.MsgBox(dialog, "Tema invÃ¡lido", saveErr.Error(), walk.MsgBoxOK|walk.MsgBoxIconError)
+					return
+				}
+				dialog.Accept()
+			}},
+			PushButton{Text: "Fechar", OnClicked: func() { dialog.Cancel() }},
+		}},
+	}}).Run(window.mainWindow); err != nil {
+		window.showError("NÃ£o foi possÃ­vel abrir o editor", err)
+	}
+}
+
+func paintHUDThemePreview(theme hudtheme.Theme) walk.PaintFunc {
+	return func(canvas *walk.Canvas, bounds walk.Rectangle) error {
+		background, err := walk.NewSolidColorBrush(walk.RGB(20, 28, 38))
+		if err != nil {
+			return err
+		}
+		defer background.Dispose()
+		if err := canvas.FillRectangle(background, bounds); err != nil {
+			return err
+		}
+		for _, element := range theme.Elements {
+			if !element.Visible {
+				continue
+			}
+			red, green, blue := uint8(245), uint8(245), uint8(245)
+			if element.Color != "" {
+				_, _ = fmt.Sscanf(element.Color, "#%02x%02x%02x", &red, &green, &blue)
+			}
+			brush, brushErr := walk.NewSolidColorBrush(walk.RGB(red, green, blue))
+			if brushErr != nil {
+				return brushErr
+			}
+			rectangle := walk.Rectangle{X: bounds.X + int(element.X/100*float64(bounds.Width)), Y: bounds.Y + int(element.Y/100*float64(bounds.Height)), Width: max(1, int(element.Width/100*float64(bounds.Width))), Height: max(1, int(element.Height/100*float64(bounds.Height)))}
+			if element.Type == hudtheme.Image {
+				rectangle.Width = max(rectangle.Width, 20)
+				rectangle.Height = max(rectangle.Height, 20)
+			}
+			err = canvas.FillRectangle(brush, rectangle)
+			brush.Dispose()
+			if err != nil {
+				return err
+			}
+		}
+		return nil
+	}
 }
 
 func (window *applicationWindow) gameHUDChanged() {
