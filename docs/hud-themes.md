@@ -2,6 +2,8 @@
 
 Com a opção **Usar HUD personalizada** ativa, selecione um `hud.json` na tela principal ou abra **Editor visual**. O tema é lido durante cada renderização: salvar o arquivo não exige recompilar o aplicativo.
 
+No editor, selecione uma camada no canvas ou na lista lateral. Arraste-a para mover; arraste a alça azul inferior direita para redimensionar. Use o painel de propriedades para ajustar texto, cor, visibilidade e medidas; os botões da lista criam caixas, textos e imagens. Ao criar uma imagem, escolha o arquivo do ícone: ele é copiado para a pasta do tema automaticamente.
+
 Cada tema fica em uma pasta própria, por exemplo:
 
 ```text

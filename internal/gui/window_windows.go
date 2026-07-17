@@ -409,7 +409,7 @@ func (window *applicationWindow) browseHUDTheme() {
 // openHUDThemeEditor keeps the editable theme in its own folder. The JSON is
 // deliberately shown in the native screen as an escape hatch for every theme
 // property while the 16:9 editor evolves.
-func (window *applicationWindow) openHUDThemeEditor() {
+func (window *applicationWindow) openLegacyHUDThemeEditor() {
 	path := window.hudThemePath()
 	if path == "" {
 		var err error

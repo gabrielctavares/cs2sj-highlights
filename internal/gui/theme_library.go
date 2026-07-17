@@ -68,6 +68,17 @@ func CreateHUDTheme(root, name string) (string, error) {
 	return path, nil
 }
 
+func DefaultHUDThemePath(root string) (string, error) {
+	themes, err := ListHUDThemes(root)
+	if err != nil {
+		return "", err
+	}
+	if len(themes) > 0 {
+		return themes[0].Path, nil
+	}
+	return CreateHUDTheme(root, "Meu HUD")
+}
+
 func themeDirectoryName(name string) string {
 	var result strings.Builder
 	previousDash := false

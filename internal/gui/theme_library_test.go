@@ -26,3 +26,18 @@ func TestCreateAndListHUDThemes(t *testing.T) {
 		t.Fatalf("unexpected themes: %#v", themes)
 	}
 }
+
+func TestDefaultHUDThemePathUsesExistingTheme(t *testing.T) {
+	root := filepath.Join(t.TempDir(), "themes")
+	path, err := CreateHUDTheme(root, "Meu HUD")
+	if err != nil {
+		t.Fatal(err)
+	}
+	got, err := DefaultHUDThemePath(root)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if got != path {
+		t.Fatalf("path = %q, want %q", got, path)
+	}
+}
