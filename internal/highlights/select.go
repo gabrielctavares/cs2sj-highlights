@@ -334,7 +334,11 @@ func foldASCII(r rune) rune {
 }
 
 func PrimaryTag(tags []string) string {
-	for _, tag := range []string{"ACE", "CLUTCH", "4K", "3K", "GRENADE_MULTI"} {
+	for _, tag := range []string{
+		"ACE", "CLUTCH_1V5", "CLUTCH_1V4", "CLUTCH_1V3", "CLUTCH_1V2", "CLUTCH_1V1", "4K", "3K",
+		"GRENADE_MULTI", "NO_SCOPE", "WALLBANG", "SMOKE_KILL", "HEADSHOT", "FLASH_ASSIST", "LONG_RANGE",
+		"FAST_MULTI", "ENTRY", "TRADE", "LOW_HP", "ASSIST",
+	} {
 		if slices.Contains(tags, tag) {
 			return tag
 		}
