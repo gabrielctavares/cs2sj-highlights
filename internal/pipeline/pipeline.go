@@ -40,18 +40,20 @@ type ManifestStore interface {
 }
 
 type Pipeline struct {
-	OutputDir        string
-	Parser           DemoParser
-	Capturer         Capturer
-	Clips            ClipBuilder
-	Summary          SummaryBuilder
-	Store            ManifestStore
-	Select           func(model.Timeline) []model.Highlight
-	ValidateMaster   func(context.Context, model.Highlight) error
-	ValidateOutputs  func(context.Context, model.OutputPaths) error
-	IncludeHighlight func(string, model.Highlight) bool
-	Logger           *slog.Logger
-	HUDMode          model.HUDMode
+	OutputDir          string
+	Parser             DemoParser
+	Capturer           Capturer
+	Clips              ClipBuilder
+	Summary            SummaryBuilder
+	Store              ManifestStore
+	Select             func(model.Timeline) []model.Highlight
+	Catalog            func(model.Timeline) ([]model.Highlight, []model.CandidateDiscard)
+	SelectedHighlights map[string][]string
+	ValidateMaster     func(context.Context, model.Highlight) error
+	ValidateOutputs    func(context.Context, model.OutputPaths) error
+	IncludeHighlight   func(string, model.Highlight) bool
+	Logger             *slog.Logger
+	HUDMode            model.HUDMode
 }
 
 type Result struct {
@@ -112,7 +114,59 @@ func (pipeline *Pipeline) AnalyzeDemo(ctx context.Context, demoPath string) (mod
 	if err != nil {
 		return model.Manifest{}, err
 	}
-	fingerprint, err := manifestpkg.Fingerprint(struct {
+	fingerprint, legacyFingerprint, err := captureFingerprints()
+	if err != nil {
+		return model.Manifest{}, err
+	}
+	manifestPath := pipeline.manifestPath(demoPath)
+	existing, loadErr := pipeline.Store.Load(manifestPath)
+	if loadErr != nil && !errors.Is(loadErr, os.ErrNotExist) {
+		return model.Manifest{}, loadErr
+	}
+	compatibleExisting := loadErr == nil && (manifestpkg.DemoCompatible(existing, demoHash, fingerprint) || manifestpkg.DemoCompatible(existing, demoHash, legacyFingerprint))
+	if compatibleExisting && manifestpkg.CatalogCurrent(existing) && existing.TickRate > 0 {
+		changed := existing.ConfigFingerprint != fingerprint
+		existing.ConfigFingerprint = fingerprint
+		if pipeline.refreshPresentation(manifestPath, demoPath, &existing, false) {
+			changed = true
+		}
+		if changed {
+			if err := pipeline.Store.Save(manifestPath, existing); err != nil {
+				return model.Manifest{}, err
+			}
+		}
+		return existing, nil
+	}
+
+	timeline, err := pipeline.Parser.Parse(ctx, demoPath)
+	if err != nil {
+		return model.Manifest{}, fmt.Errorf("parse demo %q: %w", demoPath, err)
+	}
+	timeline.DemoPath = demoPath
+	catalog, discards := pipeline.buildCatalog(timeline)
+	pipeline.prepareCatalog(manifestPath, demoPath, timeline, catalog)
+	if compatibleExisting {
+		catalog = reconcileCatalogMedia(catalog, existing.Highlights)
+	}
+	result := model.NewManifest(timeline, demoHash, fingerprint, catalog)
+	result.DiscardedCandidates = discards
+	if compatibleExisting {
+		result.SelectedHighlightIDs = existing.SelectedHighlightIDs
+		result.Summary = existing.Summary
+		result.LastError = existing.LastError
+	}
+	pipeline.refreshPresentation(manifestPath, demoPath, &result, compatibleExisting)
+	for _, discard := range discards {
+		pipeline.logger().Warn("candidate.discarded", "demo", demoPath, "round", discard.Round, "player", discard.Player.SteamID, "code", discard.Code)
+	}
+	if err := pipeline.Store.Save(manifestPath, result); err != nil {
+		return model.Manifest{}, err
+	}
+	return result, nil
+}
+
+func captureFingerprints() (current, legacy string, err error) {
+	type captureConfig struct {
 		RulesVersion string `json:"rules_version"`
 		Width        int    `json:"width"`
 		Height       int    `json:"height"`
@@ -120,136 +174,80 @@ func (pipeline *Pipeline) AnalyzeDemo(ctx context.Context, demoPath string) (mod
 		Codec        string `json:"codec"`
 		CRF          int    `json:"crf"`
 		VerticalMode string `json:"vertical_mode"`
-	}{model.RulesVersion, 1920, 1080, 60, "h264", 18, "blurred-background"})
+	}
+	current, err = manifestpkg.Fingerprint(captureConfig{model.RulesVersion, 1920, 1080, 60, "h264", 18, "blurred-background"})
 	if err != nil {
-		return model.Manifest{}, err
+		return "", "", err
 	}
-	manifestPath := pipeline.manifestPath(demoPath)
-	if existing, loadErr := pipeline.Store.Load(manifestPath); loadErr == nil {
-		if manifestpkg.Compatible(existing, demoHash, fingerprint) {
-			changed := false
-			metadataMigrated := false
-			if existing.DemoMetadata != model.DemoMetadataVersion || existing.TickRate <= 0 {
-				timeline, parseErr := pipeline.Parser.Parse(ctx, demoPath)
-				if parseErr != nil {
-					return model.Manifest{}, fmt.Errorf("parse demo team names %q: %w", demoPath, parseErr)
-				}
-				existing.TeamA = timeline.TeamA
-				existing.TeamB = timeline.TeamB
-				teamNames := timelinePlayerTeamNames(timeline)
-				current := pipeline.Select(timeline)
-				byID := make(map[string]model.Highlight, len(current))
-				for _, highlight := range current {
-					byID[highlight.ID] = highlight
-				}
-				for index := range existing.Highlights {
-					if value := teamNames[existing.Highlights[index].Player.SteamID]; value != "" {
-						existing.Highlights[index].Player.TeamName = value
-					}
-					value, ok := byID[existing.Highlights[index].ID]
-					if !ok {
-						for _, candidate := range current {
-							if candidate.Round == existing.Highlights[index].Round && candidate.Player.SteamID == existing.Highlights[index].Player.SteamID {
-								value, ok = candidate, true
-								break
-							}
-						}
-					}
-					if ok {
-						oldID := existing.Highlights[index].ID
-						existing.Highlights[index].ID = value.ID
-						existing.Highlights[index].StartTick = value.StartTick
-						existing.Highlights[index].EndTick = value.EndTick
-						existing.Highlights[index].Tags = value.Tags
-						existing.Highlights[index].Priority = value.Priority
-						existing.Highlights[index].ActionOffsets = value.ActionOffsets
-						if oldID != value.ID {
-							existing.Highlights[index].MasterVersion = ""
-							existing.Highlights[index].Status = model.ClipPending
-						}
-					}
-					for _, round := range timeline.Rounds {
-						if round.Number == existing.Highlights[index].Round {
-							existing.Highlights[index].HUD.ScoreA = round.ScoreA
-							existing.Highlights[index].HUD.ScoreB = round.ScoreB
-							existing.Highlights[index].HUD.ScoreKnown = round.ScoreKnown
-							break
-						}
-					}
-				}
-				existing.TickRate = timeline.TickRate
-				existing.DemoMetadata = model.DemoMetadataVersion
-				changed = true
-				metadataMigrated = true
-			}
-			hud := matchHUDMetadata(demoPath, existing.Map, existing.TeamA, existing.TeamB)
-			for index := range existing.Highlights {
-				if pipeline.reconcileHUDMode(manifestPath, &existing.Highlights[index]) {
-					changed = true
-				}
-				desiredHUD := hud
-				desiredHUD.ScoreA = existing.Highlights[index].HUD.ScoreA
-				desiredHUD.ScoreB = existing.Highlights[index].HUD.ScoreB
-				desiredHUD.ScoreKnown = existing.Highlights[index].HUD.ScoreKnown
-				hudChanged := existing.Highlights[index].HUD != desiredHUD
-				if hudChanged {
-					existing.Highlights[index].HUD = desiredHUD
-					changed = true
-				}
-				if (metadataMigrated || hudChanged) && existing.Highlights[index].Status == model.ClipCompleted {
-					if fileReady(existing.Highlights[index].MasterPath) {
-						existing.Highlights[index].Status = model.ClipCaptured
-					} else {
-						existing.Highlights[index].Status = model.ClipPending
-						existing.Highlights[index].Attempts = 0
-					}
-				}
-			}
-			if changed {
-				if err := pipeline.Store.Save(manifestPath, existing); err != nil {
-					return model.Manifest{}, err
-				}
-			}
-			return existing, nil
-		}
-	} else if !errors.Is(loadErr, os.ErrNotExist) {
-		return model.Manifest{}, loadErr
+	legacy, err = manifestpkg.Fingerprint(captureConfig{"rules-v2", 1920, 1080, 60, "h264", 18, "blurred-background"})
+	return current, legacy, err
+}
+
+func (pipeline *Pipeline) buildCatalog(timeline model.Timeline) ([]model.Highlight, []model.CandidateDiscard) {
+	if pipeline.Catalog != nil {
+		return pipeline.Catalog(timeline)
 	}
-	timeline, err := pipeline.Parser.Parse(ctx, demoPath)
-	if err != nil {
-		return model.Manifest{}, fmt.Errorf("parse demo %q: %w", demoPath, err)
+	if pipeline.Select != nil {
+		return pipeline.Select(timeline), nil
 	}
-	timeline.DemoPath = demoPath
-	selected := pipeline.Select(timeline)
+	return highlights.BuildCatalog(timeline, highlights.DefaultRules())
+}
+
+func (pipeline *Pipeline) prepareCatalog(manifestPath, demoPath string, timeline model.Timeline, catalog []model.Highlight) {
 	hud := matchHUDMetadata(demoPath, timeline.Map, timeline.TeamA, timeline.TeamB)
 	demoRoot := filepath.Dir(manifestPath)
-	for index := range selected {
-		selected[index].Status = model.ClipPending
-		safePlayer := highlights.SafeName(selected[index].Player.Name)
-		primary := highlights.PrimaryTag(selected[index].Tags)
-		selected[index].Outputs = model.OutputPaths{
-			Horizontal: filepath.Join(demoRoot, "clips", fmt.Sprintf("%02d-%s-%s-16x9.mp4", index+1, safePlayer, primary)),
+	for index := range catalog {
+		catalog[index].Status = model.ClipPending
+		safePlayer := highlights.SafeName(catalog[index].Player.Name)
+		primary := highlights.PrimaryTag(catalog[index].Tags)
+		base := fmt.Sprintf("%02d-%s-%s", index+1, safePlayer, primary)
+		catalog[index].Outputs = model.OutputPaths{
+			Horizontal: filepath.Join(demoRoot, "clips", base+"-16x9.mp4"),
 		}
-		selected[index].MasterMode = pipeline.HUDMode.CaptureMode()
-		selected[index].MasterVersion = model.MasterVersion
-		selected[index].MasterPath = masterPath(demoRoot, selected[index].MasterMode, selected[index].ID)
-		selected[index].OutputHUDMode = pipeline.HUDMode
-		selected[index].OutputVersion = model.OutputVersion
-		selected[index].HUD = hud
+		catalog[index].MasterMode = pipeline.HUDMode.CaptureMode()
+		catalog[index].MasterVersion = model.MasterVersion
+		catalog[index].MasterPath = masterPath(demoRoot, catalog[index].MasterMode, catalog[index].ID)
+		catalog[index].OutputHUDMode = pipeline.HUDMode
+		catalog[index].OutputVersion = model.OutputVersion
+		catalog[index].HUD = hud
 		for _, round := range timeline.Rounds {
-			if round.Number == selected[index].Round {
-				selected[index].HUD.ScoreA = round.ScoreA
-				selected[index].HUD.ScoreB = round.ScoreB
-				selected[index].HUD.ScoreKnown = round.ScoreKnown
+			if round.Number == catalog[index].Round {
+				catalog[index].HUD.ScoreA = round.ScoreA
+				catalog[index].HUD.ScoreB = round.ScoreB
+				catalog[index].HUD.ScoreKnown = round.ScoreKnown
 				break
 			}
 		}
 	}
-	result := model.NewManifest(timeline, demoHash, fingerprint, selected)
-	if err := pipeline.Store.Save(manifestPath, result); err != nil {
-		return model.Manifest{}, err
+}
+
+func (pipeline *Pipeline) refreshPresentation(manifestPath, demoPath string, manifest *model.Manifest, migrated bool) bool {
+	changed := false
+	hud := matchHUDMetadata(demoPath, manifest.Map, manifest.TeamA, manifest.TeamB)
+	for index := range manifest.Highlights {
+		if pipeline.reconcileHUDMode(manifestPath, &manifest.Highlights[index]) {
+			changed = true
+		}
+		desiredHUD := hud
+		desiredHUD.ScoreA = manifest.Highlights[index].HUD.ScoreA
+		desiredHUD.ScoreB = manifest.Highlights[index].HUD.ScoreB
+		desiredHUD.ScoreKnown = manifest.Highlights[index].HUD.ScoreKnown
+		hudChanged := manifest.Highlights[index].HUD != desiredHUD
+		if hudChanged {
+			manifest.Highlights[index].HUD = desiredHUD
+			changed = true
+		}
+		if (migrated || hudChanged) && manifest.Highlights[index].Status == model.ClipCompleted {
+			if fileReady(manifest.Highlights[index].MasterPath) {
+				manifest.Highlights[index].Status = model.ClipCaptured
+			} else {
+				manifest.Highlights[index].Status = model.ClipPending
+				manifest.Highlights[index].Attempts = 0
+			}
+			changed = true
+		}
 	}
-	return result, nil
+	return changed
 }
 
 func matchHUDMetadata(demoPath, mapName, demoTeamA, demoTeamB string) model.HUDMetadata {
@@ -331,6 +329,7 @@ func (pipeline *Pipeline) RenderDemo(ctx context.Context, demoPath string) (mode
 		return model.Manifest{}, err
 	}
 	manifestPath := pipeline.manifestPath(demoPath)
+	manifest.SelectedHighlightIDs = pipeline.selectedIDs(demoPath, manifest.Highlights)
 	if len(manifest.Highlights) == 0 {
 		manifest.State = model.DemoNoHighlights
 		return manifest, pipeline.Store.Save(manifestPath, manifest)
@@ -338,7 +337,7 @@ func (pipeline *Pipeline) RenderDemo(ctx context.Context, demoPath string) (mode
 	included := pipeline.includedCount(demoPath, manifest.Highlights)
 	if included == 0 {
 		manifest.State = model.DemoNoHighlights
-		return manifest, nil
+		return manifest, pipeline.Store.Save(manifestPath, manifest)
 	}
 	if manifest.State == model.DemoCompleted && pipeline.allCompletedOutputsValid(ctx, demoPath, manifest) {
 		return manifest, nil
@@ -520,7 +519,91 @@ func (pipeline *Pipeline) allCompletedOutputsValid(ctx context.Context, demoPath
 }
 
 func (pipeline *Pipeline) includes(demoPath string, highlight model.Highlight) bool {
+	if pipeline.SelectedHighlights != nil {
+		for _, id := range pipeline.selectedIDs(demoPath, []model.Highlight{highlight}) {
+			if id == highlight.ID {
+				return true
+			}
+		}
+		return false
+	}
 	return pipeline.IncludeHighlight == nil || pipeline.IncludeHighlight(demoPath, highlight)
+}
+
+func (pipeline *Pipeline) selectedIDs(demoPath string, catalog []model.Highlight) []string {
+	if pipeline.SelectedHighlights != nil {
+		requested := make(map[string]struct{})
+		key := strings.ToLower(filepath.Clean(demoPath))
+		for path, ids := range pipeline.SelectedHighlights {
+			if strings.ToLower(filepath.Clean(path)) != key {
+				continue
+			}
+			for _, id := range ids {
+				requested[id] = struct{}{}
+			}
+		}
+		result := make([]string, 0, len(requested))
+		for _, candidate := range catalog {
+			if _, ok := requested[candidate.ID]; ok {
+				result = append(result, candidate.ID)
+			}
+		}
+		return result
+	}
+	if pipeline.IncludeHighlight != nil {
+		result := make([]string, 0)
+		for _, candidate := range catalog {
+			if pipeline.IncludeHighlight(demoPath, candidate) {
+				result = append(result, candidate.ID)
+			}
+		}
+		return result
+	}
+	hasEvaluation := false
+	for _, candidate := range catalog {
+		hasEvaluation = hasEvaluation || candidate.Editorial.Score > 0 || candidate.Individual.Score > 0
+	}
+	if !hasEvaluation {
+		result := make([]string, len(catalog))
+		for index := range catalog {
+			result[index] = catalog[index].ID
+		}
+		return result
+	}
+	view := highlights.EditorialView(catalog, highlights.BreadthBalanced)
+	result := make([]string, len(view))
+	for index := range view {
+		result[index] = view[index].ID
+	}
+	return result
+}
+
+func reconcileCatalogMedia(current, previous []model.Highlight) []model.Highlight {
+	for index := range current {
+		for _, old := range previous {
+			if !samePlayerWindow(current[index], old) {
+				continue
+			}
+			current[index].MasterPath = old.MasterPath
+			current[index].MasterAudioPath = old.MasterAudioPath
+			current[index].MasterMode = old.MasterMode
+			current[index].MasterVersion = old.MasterVersion
+			current[index].OutputHUDMode = old.OutputHUDMode
+			current[index].OutputVersion = old.OutputVersion
+			current[index].Outputs = old.Outputs
+			current[index].Status = old.Status
+			current[index].Attempts = old.Attempts
+			current[index].LastError = old.LastError
+			break
+		}
+	}
+	return current
+}
+
+func samePlayerWindow(a, b model.Highlight) bool {
+	samePlayer := a.Player.SteamID != 0 && a.Player.SteamID == b.Player.SteamID ||
+		a.Player.SteamID == 0 && b.Player.SteamID == 0 && a.Player.Slot != 0 && a.Player.Slot == b.Player.Slot
+	return samePlayer && a.StartTick == b.StartTick && a.EndTick == b.EndTick
 }
 
 func (pipeline *Pipeline) includedCount(demoPath string, highlights []model.Highlight) int {
@@ -576,9 +659,9 @@ func (pipeline *Pipeline) defaults() {
 	if pipeline.Store == nil {
 		pipeline.Store = manifestpkg.Store{}
 	}
-	if pipeline.Select == nil {
-		pipeline.Select = func(timeline model.Timeline) []model.Highlight {
-			return highlights.Select(timeline, highlights.DefaultRules())
+	if pipeline.Catalog == nil && pipeline.Select == nil {
+		pipeline.Catalog = func(timeline model.Timeline) ([]model.Highlight, []model.CandidateDiscard) {
+			return highlights.BuildCatalog(timeline, highlights.DefaultRules())
 		}
 	}
 }

@@ -190,31 +190,14 @@ func RenderBatch(ctx context.Context, options Options, logger *slog.Logger) ([]p
 	}
 	prober := media.Prober{Path: paths.FFprobePath}
 	worker := &pipeline.Pipeline{
-		OutputDir: paths.OutputDir,
-		HUDMode:   options.HUDMode,
-		Parser:    demos.DemoParser{},
-		Capturer:  render.Runner{HLAEPath: paths.HLAEPath, HookDLL: paths.HookDLLPath, CS2Path: paths.CS2Path, Probe: prober.Probe, Guard: render.SteamConfigGuard{}, HUDMode: options.HUDMode, Logger: logger},
-		Clips:     media.ClipBuilder{FFmpegPath: paths.FFmpegPath, FontPath: paths.FontPath, LogoPath: options.HUDLogoPath, Theme: theme, ThemeDir: themeDir, Probe: prober.Probe, HUDMode: options.HUDMode, Logger: logger},
+		OutputDir:          paths.OutputDir,
+		HUDMode:            options.HUDMode,
+		Parser:             demos.DemoParser{},
+		SelectedHighlights: options.SelectedHighlights,
+		Capturer:           render.Runner{HLAEPath: paths.HLAEPath, HookDLL: paths.HookDLLPath, CS2Path: paths.CS2Path, Probe: prober.Probe, Guard: render.SteamConfigGuard{}, HUDMode: options.HUDMode, Logger: logger},
+		Clips:              media.ClipBuilder{FFmpegPath: paths.FFmpegPath, FontPath: paths.FontPath, LogoPath: options.HUDLogoPath, Theme: theme, ThemeDir: themeDir, Probe: prober.Probe, HUDMode: options.HUDMode, Logger: logger},
 		// Summary: media.SummaryBuilder{FFmpegPath: paths.FFmpegPath, Probe: prober.Probe}, // temporariamente desabilitado
 		Logger: logger,
-	}
-	if options.SelectedHighlights != nil {
-		selected := make(map[string]map[string]struct{}, len(options.SelectedHighlights))
-		for demoPath, ids := range options.SelectedHighlights {
-			key := strings.ToLower(filepath.Clean(demoPath))
-			selected[key] = make(map[string]struct{}, len(ids))
-			for _, id := range ids {
-				selected[key][id] = struct{}{}
-			}
-		}
-		worker.IncludeHighlight = func(demoPath string, highlight model.Highlight) bool {
-			ids, ok := selected[strings.ToLower(filepath.Clean(demoPath))]
-			if !ok {
-				return false
-			}
-			_, ok = ids[highlight.ID]
-			return ok
-		}
 	}
 	worker.ValidateMaster = func(ctx context.Context, highlight model.Highlight) error {
 		video, err := prober.Probe(ctx, highlight.MasterPath)

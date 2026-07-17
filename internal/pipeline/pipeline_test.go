@@ -628,6 +628,59 @@ func TestRenderUsesDemoTickRate(t *testing.T) {
 	}
 }
 
+func TestSelectedIDsDeduplicateExplicitSelection(t *testing.T) {
+	demo := filepath.Join(t.TempDir(), "match.dem")
+	pipeline := &Pipeline{SelectedHighlights: map[string][]string{demo: {"a", "a", "missing"}}}
+	catalog := []model.Highlight{{ID: "a"}, {ID: "b"}}
+	if got := pipeline.selectedIDs(demo, catalog); !slices.Equal(got, []string{"a"}) {
+		t.Fatalf("selected IDs = %#v", got)
+	}
+}
+
+func TestSelectedIDsDefaultToBalancedEditorialView(t *testing.T) {
+	pipeline := &Pipeline{}
+	catalog := []model.Highlight{
+		{ID: "broad", Editorial: model.Evaluation{Score: 35}},
+		{ID: "balanced", Editorial: model.Evaluation{Score: 60}},
+		{ID: "restricted", Editorial: model.Evaluation{Score: 85}},
+	}
+	if got := pipeline.selectedIDs("match.dem", catalog); !slices.Equal(got, []string{"restricted", "balanced"}) {
+		t.Fatalf("selected IDs = %#v", got)
+	}
+}
+
+func TestReconcileCatalogKeepsOnlyExactWindowMedia(t *testing.T) {
+	old := []model.Highlight{
+		{ID: "old-a", Player: model.Player{SteamID: 7}, StartTick: 100, EndTick: 200, MasterPath: "keep.mp4", Status: model.ClipCaptured},
+		{ID: "old-b", Player: model.Player{SteamID: 8}, StartTick: 300, EndTick: 400, MasterPath: "drop.mp4", Status: model.ClipCaptured},
+	}
+	current := []model.Highlight{
+		{ID: "new-a", Player: model.Player{SteamID: 7}, StartTick: 100, EndTick: 200},
+		{ID: "new-b", Player: model.Player{SteamID: 8}, StartTick: 300, EndTick: 401},
+	}
+	got := reconcileCatalogMedia(current, old)
+	if got[0].MasterPath != "keep.mp4" || got[0].Status != model.ClipCaptured {
+		t.Fatalf("exact window was not reused: %#v", got[0])
+	}
+	if got[1].MasterPath != "" || got[1].Status == model.ClipCaptured {
+		t.Fatalf("changed window reused media: %#v", got[1])
+	}
+}
+
+func TestRenderPersistsExplicitSelection(t *testing.T) {
+	input, output := batchDirs(t, "match.dem")
+	demo := filepath.Join(input, "match.dem")
+	pipeline := testPipeline(output)
+	pipeline.SelectedHighlights = map[string][]string{demo: {"clip", "clip"}}
+	manifest, err := pipeline.RenderDemo(context.Background(), demo)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if !slices.Equal(manifest.SelectedHighlightIDs, []string{"clip"}) {
+		t.Fatalf("selection not persisted: %#v", manifest.SelectedHighlightIDs)
+	}
+}
+
 func batchDirs(t *testing.T, demos ...string) (string, string) {
 	t.Helper()
 	root := t.TempDir()
