@@ -4,6 +4,7 @@ import (
 	"context"
 	"fmt"
 	"os"
+	"strconv"
 	"strings"
 
 	"github.com/gabrielctavares/cs2sj-highlights/internal/model"
@@ -101,6 +102,19 @@ func (DemoParser) Parse(ctx context.Context, path string) (timeline model.Timeli
 			ctName, ctScore = team.ClanName(), team.Score()
 		}
 		current.ScoreA, current.ScoreB, current.ScoreKnown = logicalScore(timeline.TeamA, timeline.TeamB, tName, tScore, ctName, ctScore)
+		if rules := p.GameState().Rules(); rules != nil {
+			conVars := rules.ConVars()
+			if timeline.RegulationMaxRounds == 0 {
+				timeline.RegulationMaxRounds = parseRuleInt(conVars, "mp_maxrounds")
+			}
+			if timeline.OvertimeMaxRounds == 0 {
+				timeline.OvertimeMaxRounds = parseRuleInt(conVars, "mp_overtime_maxrounds")
+			}
+		}
+		current.Overtime = p.GameState().OvertimeCount()
+		if current.ScoreKnown {
+			current.MatchPoint = isMatchPoint(current.ScoreA, current.ScoreB, timeline.RegulationMaxRounds, timeline.OvertimeMaxRounds, current.Overtime)
+		}
 		current.LiveTick = currentTick()
 		current.Players = snapshotPlaying(p.GameState().Participants().Playing())
 	})
@@ -108,16 +122,7 @@ func (DemoParser) Parse(ctx context.Context, path string) (timeline model.Timeli
 		if current == nil || p.GameState().IsWarmupPeriod() || e.Killer == nil || e.Victim == nil || e.Killer == e.Victim {
 			return
 		}
-		weapon := "unknown"
-		grenade := false
-		if e.Weapon != nil {
-			weapon = e.Weapon.String()
-			grenade = e.Weapon.Type == common.EqHE || e.Weapon.Type == common.EqMolotov || e.Weapon.Type == common.EqIncendiary
-		}
-		current.Kills = append(current.Kills, model.Kill{
-			Tick: currentTick(), Killer: snapshotPlayer(e.Killer), Victim: snapshotPlayer(e.Victim),
-			Weapon: weapon, IsGrenadeKill: grenade,
-		})
+		current.Kills = append(current.Kills, snapshotKill(e, currentTick()))
 	})
 	p.RegisterEventHandler(func(e events.RoundEnd) {
 		if current == nil || p.GameState().IsWarmupPeriod() {
@@ -166,6 +171,48 @@ func (DemoParser) Parse(ctx context.Context, path string) (timeline model.Timeli
 		timeline.Rounds[len(timeline.Rounds)-1].MatchEnd = true
 	}
 	return timeline, nil
+}
+
+func snapshotKill(event events.Kill, tick int) model.Kill {
+	weapon := "unknown"
+	grenade := false
+	if event.Weapon != nil {
+		weapon = event.Weapon.String()
+		grenade = event.Weapon.Type == common.EqHE || event.Weapon.Type == common.EqMolotov || event.Weapon.Type == common.EqIncendiary
+	}
+	health := 0
+	if event.Killer != nil {
+		health = event.Killer.Health()
+	}
+	return model.Kill{
+		Tick: tick, Killer: snapshotPlayer(event.Killer), Victim: snapshotPlayer(event.Victim), Assister: snapshotPlayer(event.Assister),
+		Weapon: weapon, IsGrenadeKill: grenade, PenetratedObjects: event.PenetratedObjects,
+		IsHeadshot: event.IsHeadshot, AssistedFlash: event.AssistedFlash, AttackerBlind: event.AttackerBlind,
+		NoScope: event.NoScope, ThroughSmoke: event.ThroughSmoke, Distance: float64(event.Distance),
+		DistanceKnown: event.Distance > 0, KillerHealth: health,
+	}
+}
+
+func parseRuleInt(values map[string]string, key string) int {
+	value, err := strconv.Atoi(strings.TrimSpace(values[key]))
+	if err != nil || value <= 0 {
+		return 0
+	}
+	return value
+}
+
+func isMatchPoint(scoreA, scoreB, regulationMaxRounds, overtimeMaxRounds, overtime int) bool {
+	if regulationMaxRounds <= 0 {
+		return false
+	}
+	target := regulationMaxRounds/2 + 1
+	if overtime > 0 {
+		if overtimeMaxRounds <= 0 {
+			return false
+		}
+		target = regulationMaxRounds/2 + overtime*overtimeMaxRounds/2 + 1
+	}
+	return scoreA == target-1 && scoreB < target-1 || scoreB == target-1 && scoreA < target-1
 }
 
 func mapTeam(team common.Team) model.Team {
