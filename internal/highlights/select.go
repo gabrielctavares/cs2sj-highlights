@@ -15,10 +15,19 @@ type Rules struct {
 	PostRollSeconds     float64
 	RoundEndTailSeconds float64
 	GrenadeWindow       float64
+	CandidateGapSeconds float64
+	FastSequenceSeconds float64
+	TradeWindowSeconds  float64
+	LongRangeUnits      float64
+	LowHPThreshold      int
 }
 
 func DefaultRules() Rules {
-	return Rules{MaxHighlights: 10, PreRollSeconds: 8, PostRollSeconds: 7, RoundEndTailSeconds: 2, GrenadeWindow: 5}
+	return Rules{
+		MaxHighlights: 10, PreRollSeconds: 8, PostRollSeconds: 7, RoundEndTailSeconds: 2,
+		GrenadeWindow: 5, CandidateGapSeconds: 12, FastSequenceSeconds: 5,
+		TradeWindowSeconds: 5, LongRangeUnits: 1500, LowHPThreshold: 20,
+	}
 }
 
 type clutchOpportunity struct {
