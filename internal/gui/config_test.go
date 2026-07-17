@@ -27,7 +27,7 @@ func TestLoadConfigAbsentReturnsDefaults(t *testing.T) {
 
 func TestSaveAndLoadConfig(t *testing.T) {
 	path := filepath.Join(t.TempDir(), "nested", "config.json")
-	want := Config{SchemaVersion: 1, CS2Path: `C:\cs2.exe`, InputDir: `C:\demos`, OutputDir: `D:\videos`, HUDMode: model.HUDCustom, HUDThemePath: `D:\themes\final\hud.json`}
+	want := Config{SchemaVersion: ConfigSchemaVersion, CS2Path: `C:\cs2.exe`, InputDir: `C:\demos`, OutputDir: `D:\videos`, HUDMode: model.HUDCustom, HUDThemePath: `D:\themes\final\hud.json`, FavoriteSteamID: 76561198000000001}
 	if err := SaveConfig(path, want); err != nil {
 		t.Fatal(err)
 	}
@@ -76,7 +76,7 @@ func TestLoadConfigRejectsCorruptAndUnsupportedData(t *testing.T) {
 		data string
 	}{
 		{"corrupt", `{`},
-		{"unsupported", `{"schema_version":2}`},
+		{"unsupported", `{"schema_version":99}`},
 	}
 	for _, test := range tests {
 		t.Run(test.name, func(t *testing.T) {
@@ -88,5 +88,19 @@ func TestLoadConfigRejectsCorruptAndUnsupportedData(t *testing.T) {
 				t.Fatal("expected error")
 			}
 		})
+	}
+}
+
+func TestLoadConfigMigratesSchemaOne(t *testing.T) {
+	path := filepath.Join(t.TempDir(), "config.json")
+	if err := os.WriteFile(path, []byte(`{"schema_version":1,"input_dir":"C:\\demos","hud_mode":"none"}`), 0o600); err != nil {
+		t.Fatal(err)
+	}
+	got, err := LoadConfig(path)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if got.SchemaVersion != ConfigSchemaVersion || got.InputDir != `C:\demos` || got.FavoriteSteamID != 0 {
+		t.Fatalf("unexpected migrated config: %#v", got)
 	}
 }

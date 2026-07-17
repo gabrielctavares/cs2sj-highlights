@@ -11,15 +11,16 @@ import (
 	"github.com/gabrielctavares/cs2sj-highlights/internal/model"
 )
 
-const ConfigSchemaVersion = 1
+const ConfigSchemaVersion = 2
 
 type Config struct {
-	SchemaVersion int           `json:"schema_version"`
-	CS2Path       string        `json:"cs2_path"`
-	InputDir      string        `json:"input_dir"`
-	OutputDir     string        `json:"output_dir"`
-	HUDMode       model.HUDMode `json:"hud_mode,omitempty"`
-	HUDThemePath  string        `json:"hud_theme_path,omitempty"`
+	SchemaVersion   int           `json:"schema_version"`
+	CS2Path         string        `json:"cs2_path"`
+	InputDir        string        `json:"input_dir"`
+	OutputDir       string        `json:"output_dir"`
+	HUDMode         model.HUDMode `json:"hud_mode,omitempty"`
+	HUDThemePath    string        `json:"hud_theme_path,omitempty"`
+	FavoriteSteamID uint64        `json:"favorite_steam_id,omitempty"`
 }
 
 func ConfigPath(localAppData string) string {
@@ -46,6 +47,9 @@ func LoadConfig(path string) (Config, error) {
 			err = fmt.Errorf("dados adicionais")
 		}
 		return Config{}, fmt.Errorf("ler configuração %q: %w", path, err)
+	}
+	if config.SchemaVersion == 1 {
+		config.SchemaVersion = ConfigSchemaVersion
 	}
 	if config.SchemaVersion != ConfigSchemaVersion {
 		return Config{}, fmt.Errorf("versão de configuração não suportada: %d", config.SchemaVersion)
