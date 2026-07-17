@@ -78,16 +78,16 @@ func RunThemeEditor(owner walk.Form, path string) error {
 			CustomWidget{AssignTo: &editor.canvas, MinSize: Size{Width: 640, Height: 360}, Paint: editor.paint, PaintMode: PaintBuffered, InvalidatesOnResize: true, StretchFactor: 1, OnMouseDown: editor.mouseDown, OnMouseMove: editor.mouseMove, OnMouseUp: editor.mouseUp},
 			Composite{Layout: HBox{Spacing: 8}, Children: []Widget{HSpacer{}, PushButton{Text: "Salvar tema", OnClicked: editor.save}, PushButton{Text: "Fechar", OnClicked: func() { editor.dialog.Cancel() }}}},
 		}},
-		Composite{MinSize: Size{Width: 250}, Layout: Grid{Columns: 2, Spacing: 6}, Children: []Widget{
+		Composite{MinSize: Size{Width: 280}, Layout: Grid{Columns: 1, Spacing: 3}, Children: []Widget{
 			Label{Text: "Propriedades", ColumnSpan: 2}, Label{AssignTo: &editor.name, Text: "Selecione uma camada", ColumnSpan: 2},
 			Label{Text: "Texto"}, LineEdit{AssignTo: &editor.text, OnTextChanged: editor.applyText},
-			Label{Text: "Vínculo"}, LineEdit{AssignTo: &editor.binding, OnTextChanged: editor.applyBinding},
-			Label{Text: "Fonte"}, LineEdit{AssignTo: &editor.fontSize, OnTextChanged: func() {
+			Label{Text: "Vínculo (ex.: nome do time, placar)"}, LineEdit{AssignTo: &editor.binding, OnTextChanged: editor.applyBinding},
+			Label{Text: "Tamanho da fonte"}, LineEdit{AssignTo: &editor.fontSize, OnTextChanged: func() {
 				editor.applyNumber(editor.fontSize, func(e *hudtheme.Element, v float64) { e.FontSize = int(v) })
 			}},
 			Label{Text: "Âncora"}, LineEdit{AssignTo: &editor.anchor, OnTextChanged: editor.applyAnchor},
-			Label{Text: "Opacidade"}, LineEdit{AssignTo: &editor.opacity, OnTextChanged: func() { editor.applyNumber(editor.opacity, func(e *hudtheme.Element, v float64) { e.Opacity = v }) }},
-			Label{Text: "Imagem"}, LineEdit{AssignTo: &editor.asset, OnTextChanged: editor.applyAsset},
+			Label{Text: "Opacidade (0 a 1)"}, LineEdit{AssignTo: &editor.opacity, OnTextChanged: func() { editor.applyNumber(editor.opacity, func(e *hudtheme.Element, v float64) { e.Opacity = v }) }},
+			Label{Text: "Arquivo de imagem"}, LineEdit{AssignTo: &editor.asset, OnTextChanged: editor.applyAsset},
 			Label{Text: "Cor"}, LineEdit{AssignTo: &editor.color, OnTextChanged: editor.applyColor},
 			Label{Text: "X (%)"}, LineEdit{AssignTo: &editor.x, OnTextChanged: func() { editor.applyNumber(editor.x, func(e *hudtheme.Element, v float64) { e.X = v }) }},
 			Label{Text: "Y (%)"}, LineEdit{AssignTo: &editor.y, OnTextChanged: func() { editor.applyNumber(editor.y, func(e *hudtheme.Element, v float64) { e.Y = v }) }},
