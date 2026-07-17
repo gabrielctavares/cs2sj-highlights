@@ -1,0 +1,12 @@
+.superpowers/
+bin/
+dist/
+work/
+outputs/
+coverage.out
+*.partial.mp4
+*.dem
+*.mp4
+*.wav
+cmd/cs2sj-demo/rsrc_windows_*.syso
+assets/cs2sj-logo.ico
