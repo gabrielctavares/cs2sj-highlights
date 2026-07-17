@@ -89,9 +89,20 @@ func (Store) Save(path string, value model.Manifest) (err error) {
 	return nil
 }
 
-func Compatible(manifest model.Manifest, demoHash, configFingerprint string) bool {
+func DemoCompatible(manifest model.Manifest, demoHash, configFingerprint string) bool {
+	supportedSchema := manifest.SchemaVersion == "manifest-v1" || manifest.SchemaVersion == model.ManifestSchemaVersion
+	return supportedSchema && manifest.DemoSHA256 == demoHash && manifest.ConfigFingerprint == configFingerprint
+}
+
+func CatalogCurrent(manifest model.Manifest) bool {
 	return manifest.SchemaVersion == model.ManifestSchemaVersion &&
 		manifest.RulesVersion == model.RulesVersion &&
-		manifest.DemoSHA256 == demoHash &&
-		manifest.ConfigFingerprint == configFingerprint
+		manifest.DemoMetadata == model.DemoMetadataVersion &&
+		manifest.CandidateVersion == model.CandidateVersion &&
+		manifest.ScoringVersion == model.ScoringVersion &&
+		manifest.DiversityVersion == model.DiversityVersion
+}
+
+func Compatible(manifest model.Manifest, demoHash, configFingerprint string) bool {
+	return DemoCompatible(manifest, demoHash, configFingerprint) && CatalogCurrent(manifest)
 }

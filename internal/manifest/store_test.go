@@ -13,7 +13,12 @@ import (
 func TestSaveLoadAndCompatibility(t *testing.T) {
 	dir := t.TempDir()
 	path := filepath.Join(dir, "manifest.json")
-	want := model.Manifest{SchemaVersion: "manifest-v1", RulesVersion: "rules-v2", DemoSHA256: "demo", ConfigFingerprint: "cfg"}
+	want := model.Manifest{
+		SchemaVersion: model.ManifestSchemaVersion, RulesVersion: model.RulesVersion,
+		DemoMetadata: model.DemoMetadataVersion, CandidateVersion: model.CandidateVersion,
+		ScoringVersion: model.ScoringVersion, DiversityVersion: model.DiversityVersion,
+		DemoSHA256: "demo", ConfigFingerprint: "cfg",
+	}
 	store := Store{}
 	if err := store.Save(path, want); err != nil {
 		t.Fatal(err)
@@ -85,5 +90,34 @@ func TestSaveReplacesExistingManifest(t *testing.T) {
 	}
 	if got.DemoSHA256 != "new" {
 		t.Fatalf("got %q", got.DemoSHA256)
+	}
+}
+
+func TestCompatibilitySeparatesDemoFromCatalogVersions(t *testing.T) {
+	value := model.Manifest{
+		SchemaVersion: model.ManifestSchemaVersion,
+		DemoSHA256:    "demo", ConfigFingerprint: "capture",
+		DemoMetadata:     model.DemoMetadataVersion,
+		CandidateVersion: "old", ScoringVersion: "old", DiversityVersion: "old",
+	}
+	if !DemoCompatible(value, "demo", "capture") {
+		t.Fatal("expected demo and capture identity to remain compatible")
+	}
+	if CatalogCurrent(value) {
+		t.Fatal("stale catalog versions must require recalculation")
+	}
+	value.CandidateVersion = model.CandidateVersion
+	value.ScoringVersion = model.ScoringVersion
+	value.DiversityVersion = model.DiversityVersion
+	value.RulesVersion = model.RulesVersion
+	if !CatalogCurrent(value) {
+		t.Fatal("current catalog versions must be accepted")
+	}
+}
+
+func TestDemoCompatibilityRejectsUnknownSchema(t *testing.T) {
+	value := model.Manifest{SchemaVersion: "future", DemoSHA256: "demo", ConfigFingerprint: "capture"}
+	if DemoCompatible(value, "demo", "capture") {
+		t.Fatal("unknown schema must not be reused")
 	}
 }
