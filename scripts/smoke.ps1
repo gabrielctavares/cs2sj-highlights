@@ -58,6 +58,22 @@ try {
         throw "Smoke incompleto. Verifique manifest.json e render.log em $outputPath."
     }
 
+    foreach ($manifestFile in $manifests) {
+        $manifest = Get-Content -LiteralPath $manifestFile.FullName -Raw | ConvertFrom-Json
+        if (-not $manifest.candidate_version -or -not $manifest.scoring_version -or -not $manifest.diversity_version) {
+            throw "Manifesto sem versões do catálogo: $($manifestFile.FullName)"
+        }
+        if ($null -eq $manifest.selected_highlight_ids -or -not ($manifest.selected_highlight_ids -is [array])) {
+            throw "Manifesto sem selected_highlight_ids: $($manifestFile.FullName)"
+        }
+        foreach ($selectedID in $manifest.selected_highlight_ids) {
+            $highlight = @($manifest.highlights | Where-Object { $_.id -eq $selectedID })
+            if ($highlight.Count -ne 1 -or $null -eq $highlight[0].individual -or $null -eq $highlight[0].editorial) {
+                throw "Highlight selecionado sem avaliações duplas: $selectedID"
+            }
+        }
+    }
+
     Write-Host "Smoke concluído. Saída: $outputPath"
 }
 finally {

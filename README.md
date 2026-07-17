@@ -11,12 +11,13 @@ Aplicativo local para Windows que lê demos de Counter-Strike 2, seleciona highl
    - a pasta contendo as demos `.dem`;
    - a pasta onde os vídeos serão salvos.
 4. Clique em **Analisar demos**.
-5. Confira a tabela com demo, mapa, jogador, tipo do highlight e round.
-6. Desmarque os clipes que não deseja gerar e clique em **Processar selecionados**.
+5. Em **Melhores da partida**, confira os lances de maior valor para a narrativa geral; em **Por jogador**, escolha um SteamID e veja suas melhores jogadas individuais.
+6. Escolha a abrangência **Restrita**, **Equilibrada** ou **Ampla**, adicione os lances desejados e confira a aba **Seleção final**.
+7. Clique em **Processar seleção final**.
 
-Todos os clipes vêm marcados por padrão. Os botões **Marcar todos** e **Desmarcar todos** permitem ajustar a lista rapidamente. Demos sem nenhum clipe marcado são ignoradas na captura.
+Somente itens explicitamente adicionados à seleção final são renderizados. Um mesmo candidato pode aparecer nas duas perspectivas com notas diferentes, mas entra uma única vez na seleção e gera uma única captura. O jogador escolhido fica salvo por SteamID e é pré-selecionado quando estiver presente em uma análise futura.
 
-Não existe quantidade mínima de clipes por partida. A seleção automática aceita apenas ACE, clutch vencido, 4K, 3K ou multi-kill de granada; uma demo sem jogadas que atendam a esses critérios aparece sem clipes e não é renderizada.
+Não existe limite fixo de clipes. A análise considera multi-kills, clutch, assists, flash assists, headshots, wallbangs, no-scopes, kills pela smoke, longa distância, entry, trade, sequência rápida, pouca vida, match point, overtime e fim da partida. **Restrita**, **Equilibrada** e **Ampla** aplicam limiares decrescentes de 85, 60 e 35; uma demo pode produzir zero ou muitos resultados.
 
 Os caminhos ficam salvos em `%LocalAppData%\CS2SJ-Demo\config.json`. A análise e a captura rodam em segundo plano, a janela mostra o andamento e permite abrir a pasta dos vídeos ao terminar.
 
@@ -35,6 +36,7 @@ videos-campeonato\
   final\
     manifest.json
     render.log
+    selection-decisions.jsonl
     clips\
       01-jogador-ACE-16x9.mp4
     masters\
@@ -43,6 +45,8 @@ videos-campeonato\
 ```
 
 As versões verticais e os vídeos de resumo estão temporariamente desabilitados para reduzir o tempo e a carga de pós-produção. O código desses recursos foi preservado para reativação futura.
+
+`selection-decisions.jsonl` registra localmente os candidatos visíveis, perspectiva, abrangência, fatores objetivos, nota e decisão final para ajudar na calibração do beta. O aplicativo não envia esse arquivo nem qualquer telemetria; ele só é compartilhado se você o copiar manualmente.
 
 ## Modos de HUD
 
@@ -88,6 +92,8 @@ O parâmetro `-FFprobePath` é necessário quando a distribuição do HLAE cont�
 Por padrão, o resultado fica em `dist\stage\CS2SJ-Demo`, pronto para uso ou para você compactar quando necessário. Para o script também gerar `dist\CS2SJ-Demo-windows-x64.zip`, acrescente `-CreateZip` ao comando.
 
 ## CLI opcional
+
+Sem uma seleção explícita fornecida pela GUI, o comando `render` usa a visão editorial com abrangência **Equilibrada** como padrão.
 
 ```powershell
 .\bin\cs2-highlights-cli.exe analyze C:\demos --output C:\videos
