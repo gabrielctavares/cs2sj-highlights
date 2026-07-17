@@ -24,6 +24,9 @@ type themeEditorWindow struct {
 	text     *walk.LineEdit
 	binding  *walk.LineEdit
 	fontSize *walk.LineEdit
+	anchor   *walk.LineEdit
+	opacity  *walk.LineEdit
+	asset    *walk.LineEdit
 	color    *walk.LineEdit
 	x        *walk.LineEdit
 	y        *walk.LineEdit
@@ -77,6 +80,9 @@ func RunThemeEditor(owner walk.Form, path string) error {
 			Label{Text: "Fonte"}, LineEdit{AssignTo: &editor.fontSize, OnTextChanged: func() {
 				editor.applyNumber(editor.fontSize, func(e *hudtheme.Element, v float64) { e.FontSize = int(v) })
 			}},
+			Label{Text: "Âncora"}, LineEdit{AssignTo: &editor.anchor, OnTextChanged: editor.applyAnchor},
+			Label{Text: "Opacidade"}, LineEdit{AssignTo: &editor.opacity, OnTextChanged: func() { editor.applyNumber(editor.opacity, func(e *hudtheme.Element, v float64) { e.Opacity = v }) }},
+			Label{Text: "Imagem"}, LineEdit{AssignTo: &editor.asset, OnTextChanged: editor.applyAsset},
 			Label{Text: "Cor"}, LineEdit{AssignTo: &editor.color, OnTextChanged: editor.applyColor},
 			Label{Text: "X (%)"}, LineEdit{AssignTo: &editor.x, OnTextChanged: func() { editor.applyNumber(editor.x, func(e *hudtheme.Element, v float64) { e.X = v }) }},
 			Label{Text: "Y (%)"}, LineEdit{AssignTo: &editor.y, OnTextChanged: func() { editor.applyNumber(editor.y, func(e *hudtheme.Element, v float64) { e.Y = v }) }},
@@ -167,6 +173,9 @@ func (editor *themeEditorWindow) refresh() {
 	editor.text.SetText(selected.Text)
 	editor.binding.SetText(string(selected.Binding))
 	editor.fontSize.SetText(strconv.Itoa(selected.FontSize))
+	editor.anchor.SetText(string(selected.Anchor))
+	editor.opacity.SetText(fmt.Sprintf("%.2f", selected.Opacity))
+	editor.asset.SetText(selected.Asset)
 	editor.color.SetText(selected.Color)
 	editor.x.SetText(fmt.Sprintf("%.1f", selected.X))
 	editor.y.SetText(fmt.Sprintf("%.1f", selected.Y))
@@ -197,6 +206,18 @@ func (editor *themeEditorWindow) applyColor() {
 func (editor *themeEditorWindow) applyBinding() {
 	if !editor.updating {
 		_ = editor.state.SetSelectedElement(func(e *hudtheme.Element) { e.Binding = hudtheme.Binding(editor.binding.Text()) })
+		editor.canvas.Invalidate()
+	}
+}
+func (editor *themeEditorWindow) applyAnchor() {
+	if !editor.updating {
+		_ = editor.state.SetSelectedElement(func(e *hudtheme.Element) { e.Anchor = hudtheme.Anchor(editor.anchor.Text()) })
+		editor.canvas.Invalidate()
+	}
+}
+func (editor *themeEditorWindow) applyAsset() {
+	if !editor.updating {
+		_ = editor.state.SetSelectedElement(func(e *hudtheme.Element) { e.Asset = filepath.Base(editor.asset.Text()) })
 		editor.canvas.Invalidate()
 	}
 }
