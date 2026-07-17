@@ -470,6 +470,9 @@ func (pipeline *Pipeline) RenderDemo(ctx context.Context, demoPath string) (mode
 }
 
 func (pipeline *Pipeline) captureAttempt(ctx context.Context, demoPath string, manifest *model.Manifest, manifestPath string, pass render.RenderPass) (map[string]render.CaptureAssets, error) {
+	if manifest.TickRate <= 0 {
+		return nil, fmt.Errorf("manifest has invalid tick rate %.3f", manifest.TickRate)
+	}
 	for _, clip := range pass.Clips {
 		if index := highlightIndex(manifest.Highlights, clip.ID); index >= 0 {
 			manifest.Highlights[index].Attempts++
@@ -481,7 +484,7 @@ func (pipeline *Pipeline) captureAttempt(ctx context.Context, demoPath string, m
 	}
 	pipeline.logger().Info("capture.started", "demo", demoPath, "pass", pass.Index, "clips", len(pass.Clips))
 	started := time.Now()
-	assets, err := pipeline.Capturer.RunPass(ctx, demoPath, pass, 64)
+	assets, err := pipeline.Capturer.RunPass(ctx, demoPath, pass, manifest.TickRate)
 	duration := time.Since(started)
 	if err != nil {
 		for _, clip := range pass.Clips {

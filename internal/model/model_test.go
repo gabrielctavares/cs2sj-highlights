@@ -16,6 +16,13 @@ func TestNewManifestStartsPending(t *testing.T) {
 	}
 }
 
+func TestNewManifestPreservesTickRate(t *testing.T) {
+	got := NewManifest(Timeline{DemoPath: "match.dem", Map: "de_nuke", TickRate: 128}, "hash", "cfg", nil)
+	if got.TickRate != 128 {
+		t.Fatalf("tick rate = %v", got.TickRate)
+	}
+}
+
 func TestNewManifestWithoutHighlightsIsComplete(t *testing.T) {
 	got := NewManifest(Timeline{DemoPath: "empty.dem"}, "hash", "cfg", nil)
 	if got.State != DemoNoHighlights {

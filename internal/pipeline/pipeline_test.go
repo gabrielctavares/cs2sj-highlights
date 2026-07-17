@@ -609,6 +609,25 @@ func testPipeline(output string) *Pipeline {
 	return pipeline
 }
 
+func TestRenderUsesDemoTickRate(t *testing.T) {
+	input, output := batchDirs(t, "match.dem")
+	pipeline := testPipeline(output)
+	pipeline.Parser = parserFunc(func(_ context.Context, path string) (model.Timeline, error) {
+		return model.Timeline{DemoPath: path, Map: "de_nuke", TickRate: 128}, nil
+	})
+	var capturedRate float64
+	pipeline.Capturer = capturerFunc(func(_ context.Context, _ string, pass render.RenderPass, rate float64) (map[string]render.CaptureAssets, error) {
+		capturedRate = rate
+		return map[string]render.CaptureAssets{"clip": {VideoPath: pass.Clips[0].MasterPath}}, nil
+	})
+	if _, err := pipeline.RenderDemo(context.Background(), filepath.Join(input, "match.dem")); err != nil {
+		t.Fatal(err)
+	}
+	if capturedRate != 128 {
+		t.Fatalf("capture rate = %v, want 128", capturedRate)
+	}
+}
+
 func batchDirs(t *testing.T, demos ...string) (string, string) {
 	t.Helper()
 	root := t.TempDir()

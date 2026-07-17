@@ -129,6 +129,7 @@ type Manifest struct {
 	DemoSHA256        string      `json:"demo_sha256"`
 	DemoPath          string      `json:"demo_path"`
 	Map               string      `json:"map"`
+	TickRate          float64     `json:"tick_rate,omitempty"`
 	TeamA             string      `json:"team_a,omitempty"`
 	TeamB             string      `json:"team_b,omitempty"`
 	DemoMetadata      string      `json:"demo_metadata,omitempty"`
@@ -150,6 +151,7 @@ func NewManifest(t Timeline, demoHash, configFingerprint string, highlights []Hi
 		DemoSHA256:        demoHash,
 		DemoPath:          t.DemoPath,
 		Map:               t.Map,
+		TickRate:          t.TickRate,
 		TeamA:             t.TeamA,
 		TeamB:             t.TeamB,
 		DemoMetadata:      "demo-v5",
