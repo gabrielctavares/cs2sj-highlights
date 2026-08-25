@@ -2,12 +2,16 @@ param(
     [Parameter(Mandatory = $true)]
     [string]$HLAEDir,
 
+    [string]$FFmpegPath,
+
     [string]$FFprobePath,
 
     [switch]$CreateZip
 )
 
 $ErrorActionPreference = 'Stop'
+
+Import-Module (Join-Path $PSScriptRoot 'release\ReleaseTools.psm1') -Force
 
 $root = [System.IO.Path]::GetFullPath((Split-Path -Parent $PSScriptRoot))
 $hlae = (Resolve-Path -LiteralPath $HLAEDir).Path
@@ -31,7 +35,14 @@ if ($null -eq $hook) {
 $ffmpeg = Get-ChildItem -LiteralPath $hlae -Filter 'ffmpeg.exe' -File -Recurse | Select-Object -First 1
 $ffprobe = Get-ChildItem -LiteralPath $hlae -Filter 'ffprobe.exe' -File -Recurse | Select-Object -First 1
 if ($null -eq $ffmpeg) {
-    throw "ffmpeg.exe não encontrado em $hlae"
+    if ([string]::IsNullOrWhiteSpace($FFmpegPath)) {
+        throw 'ffmpeg.exe não acompanha esta distribuição do HLAE; informe -FFmpegPath com o binário oficial correspondente.'
+    }
+    $resolvedFFmpeg = (Resolve-Path -LiteralPath $FFmpegPath).Path
+    if (-not (Test-Path -LiteralPath $resolvedFFmpeg -PathType Leaf) -or -not [string]::Equals([System.IO.Path]::GetFileName($resolvedFFmpeg), 'ffmpeg.exe', [System.StringComparison]::OrdinalIgnoreCase)) {
+        throw "FFmpeg inválido: $resolvedFFmpeg"
+    }
+    $ffmpeg = Get-Item -LiteralPath $resolvedFFmpeg
 }
 if ($null -eq $ffprobe) {
     if ([string]::IsNullOrWhiteSpace($FFprobePath)) {
@@ -64,36 +75,17 @@ Copy-Item -LiteralPath (Join-Path $root 'bin\cs2-highlights-cli.exe') -Destinati
 Copy-Item -LiteralPath (Join-Path $root 'assets\cs2sj-logo.jpg') -Destination (Join-Path $stage 'assets\cs2sj-logo.jpg') -Force
 Copy-Item -LiteralPath (Join-Path $root 'assets\cs2sj-logo.ico') -Destination (Join-Path $stage 'assets\cs2sj-logo.ico') -Force
 Copy-Item -Path (Join-Path $hlae '*') -Destination (Join-Path $stage 'tools\hlae') -Recurse -Force
-$stagedFFprobePath = Join-Path $stage 'tools\hlae\ffmpeg\bin\ffprobe.exe'
-if (-not (Test-Path -LiteralPath $stagedFFprobePath -PathType Leaf)) {
-    New-Item -ItemType Directory -Force -Path (Split-Path -Parent $stagedFFprobePath) | Out-Null
-    Copy-Item -LiteralPath $ffprobe.FullName -Destination $stagedFFprobePath -Force
-}
+$mediaDir = Join-Path $stage 'tools\hlae\ffmpeg\bin'
+New-Item -ItemType Directory -Force -Path $mediaDir | Out-Null
+Copy-Item -LiteralPath $ffmpeg.FullName -Destination (Join-Path $mediaDir 'ffmpeg.exe') -Force
+Copy-Item -LiteralPath $ffprobe.FullName -Destination (Join-Path $mediaDir 'ffprobe.exe') -Force
 Copy-Item -LiteralPath (Join-Path $root 'third_party\walk\LICENSE') -Destination (Join-Path $stage 'licenses\WALK-LICENSE.txt') -Force
 Copy-Item -LiteralPath (Join-Path $root 'third_party\NOTICE.md') -Destination (Join-Path $stage 'licenses\NOTICE.md') -Force
 if (Test-Path -LiteralPath (Join-Path $hlae 'LICENSES')) {
     Copy-Item -LiteralPath (Join-Path $hlae 'LICENSES') -Destination (Join-Path $stage 'licenses\HLAE-LICENSES') -Recurse -Force
 }
 
-$required = @(
-    (Join-Path $stage 'CS2SJ-Demo.exe'),
-    (Join-Path $stage 'CS2SJ-Demo.exe.manifest'),
-    (Join-Path $stage 'cs2-highlights-cli.exe'),
-    (Join-Path $stage 'tools\hlae\hlae.exe'),
-    (Join-Path $stage 'assets\cs2sj-logo.jpg'),
-    (Join-Path $stage 'licenses\NOTICE.md')
-)
-foreach ($path in $required) {
-    if (-not (Test-Path -LiteralPath $path -PathType Leaf)) {
-        throw "Arquivo obrigatório ausente no pacote: $path"
-    }
-}
-$stagedHook = Get-ChildItem -LiteralPath (Join-Path $stage 'tools\hlae') -Filter 'AfxHookSource2.dll' -File -Recurse | Select-Object -First 1
-$stagedFFmpeg = Get-ChildItem -LiteralPath (Join-Path $stage 'tools\hlae') -Filter 'ffmpeg.exe' -File -Recurse | Select-Object -First 1
-$stagedFFprobe = Get-ChildItem -LiteralPath (Join-Path $stage 'tools\hlae') -Filter 'ffprobe.exe' -File -Recurse | Select-Object -First 1
-if ($null -eq $stagedHook -or $null -eq $stagedFFmpeg -or $null -eq $stagedFFprobe) {
-    throw 'O HLAE copiado para o pacote está incompleto.'
-}
+Assert-ReleaseStage $stage
 
 Write-Host "Pasta portátil preparada em $stage"
 if ($CreateZip) {

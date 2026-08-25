@@ -11,6 +11,9 @@ try {
     & (Join-Path $PSScriptRoot 'test-release-tools.ps1')
     if ($LASTEXITCODE -ne 0) { throw 'Testes das ferramentas de release falharam.' }
 
+    & (Join-Path $PSScriptRoot 'test-package.ps1')
+    if ($LASTEXITCODE -ne 0) { throw 'Teste do pacote portátil falhou.' }
+
     & go mod verify
     if ($LASTEXITCODE -ne 0) { throw 'go mod verify falhou.' }
 
