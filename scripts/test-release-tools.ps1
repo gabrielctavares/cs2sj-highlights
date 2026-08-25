@@ -79,6 +79,13 @@ try {
     $dependency.sha256 = ('0' * 64)
     Assert-Throws { Get-VerifiedDownload $dependency (Join-Path $temp 'downloads-bad') $copyDownload } 'SHA-256'
 
+    $compiler = Join-Path $temp 'compiler\ISCC.exe'
+    Write-TestFile $compiler
+    Assert-Equal ([System.IO.Path]::GetFullPath($compiler)) (Resolve-InnoCompiler $compiler) 'compilador explícito'
+    $wrongCompiler = Join-Path $temp 'compiler\compiler.exe'
+    Write-TestFile $wrongCompiler
+    Assert-Throws { Resolve-InnoCompiler $wrongCompiler } 'ISCC.exe'
+
     $stage = Join-Path $temp 'stage'
     New-Item -ItemType Directory -Path $stage | Out-Null
     Assert-Throws { Assert-ReleaseStage $stage } 'CS2SJ-Demo.exe'

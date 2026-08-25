@@ -145,11 +145,44 @@ function Write-ReleaseChecksums {
     [System.IO.File]::WriteAllLines($absoluteOutput, $lines, [System.Text.UTF8Encoding]::new($false))
 }
 
+function Resolve-InnoCompiler {
+    param([string]$ExplicitPath)
+
+    if (-not [string]::IsNullOrWhiteSpace($ExplicitPath)) {
+        $resolved = (Resolve-Path -LiteralPath $ExplicitPath).Path
+        if (-not (Test-Path -LiteralPath $resolved -PathType Leaf) -or -not [string]::Equals([System.IO.Path]::GetFileName($resolved), 'ISCC.exe', [System.StringComparison]::OrdinalIgnoreCase)) {
+            throw "Compilador Inno inválido; informe o caminho de ISCC.exe: $resolved"
+        }
+        return $resolved
+    }
+
+    $candidates = @()
+    if (-not [string]::IsNullOrWhiteSpace($env:LOCALAPPDATA)) {
+        $candidates += (Join-Path $env:LOCALAPPDATA 'Programs\Inno Setup 7\ISCC.exe')
+        $candidates += (Join-Path $env:LOCALAPPDATA 'Programs\Inno Setup 6\ISCC.exe')
+    }
+    if (-not [string]::IsNullOrWhiteSpace($env:ProgramFiles)) {
+        $candidates += (Join-Path $env:ProgramFiles 'Inno Setup 7\ISCC.exe')
+    }
+    $programFilesX86 = [System.Environment]::GetEnvironmentVariable('ProgramFiles(x86)')
+    if (-not [string]::IsNullOrWhiteSpace($programFilesX86)) {
+        $candidates += (Join-Path $programFilesX86 'Inno Setup 7\ISCC.exe')
+        $candidates += (Join-Path $programFilesX86 'Inno Setup 6\ISCC.exe')
+    }
+    foreach ($candidate in $candidates) {
+        if (Test-Path -LiteralPath $candidate -PathType Leaf) {
+            return [System.IO.Path]::GetFullPath($candidate)
+        }
+    }
+    throw 'ISCC.exe não encontrado. Instale o Inno Setup ou informe -InnoCompilerPath.'
+}
+
 Export-ModuleMember -Function @(
     'Assert-StableVersion',
     'Get-ReleaseArtifactNames',
     'Read-ReleaseDependencies',
     'Get-VerifiedDownload',
     'Assert-ReleaseStage',
-    'Write-ReleaseChecksums'
+    'Write-ReleaseChecksums',
+    'Resolve-InnoCompiler'
 )
