@@ -54,13 +54,17 @@ if (-not (Test-Path -LiteralPath $iss -PathType Leaf)) {
     throw "Definição do instalador ausente: $iss"
 }
 
-$testRoot = Join-Path ([System.IO.Path]::GetTempPath()) ("cs2sj-installer-test-" + [guid]::NewGuid())
+$uninstallKey = 'HKCU:\Software\Microsoft\Windows\CurrentVersion\Uninstall\CS2SJ-Demo_is1'
+if (Test-Path -LiteralPath $uninstallKey) {
+    throw 'Teste cancelado: existe uma instalação do CS2SJ Demo para este usuário.'
+}
+
+$testRoot = Join-Path ([System.IO.Path]::GetTempPath()) ("cs2sj installer test " + [guid]::NewGuid())
 $baselineOutput = Join-Path $testRoot 'baseline'
 $currentOutput = Join-Path $testRoot 'current'
 $installDir = Join-Path $testRoot 'installed'
 New-Item -ItemType Directory -Path $baselineOutput, $currentOutput | Out-Null
 
-$uninstallKey = 'HKCU:\Software\Microsoft\Windows\CurrentVersion\Uninstall\CS2SJ-Demo_is1'
 $configDir = Join-Path $env:LOCALAPPDATA 'CS2SJ-Demo'
 New-Item -ItemType Directory -Force -Path $configDir | Out-Null
 $sentinel = Join-Path $configDir ("installer-test-sentinel-" + [guid]::NewGuid() + '.txt')
@@ -79,7 +83,7 @@ try {
         }
     }
 
-    $installArguments = @('/CURRENTUSER', '/VERYSILENT', '/SUPPRESSMSGBOXES', '/NORESTART', "/DIR=$installDir")
+    $installArguments = @('/CURRENTUSER', '/VERYSILENT', '/SUPPRESSMSGBOXES', '/NORESTART', "/DIR=`"$installDir`"")
     Start-CheckedProcess $baselineSetup $installArguments 'Instalação baseline'
     Assert-ReleaseStage $installDir
     if (-not (Test-Path -LiteralPath $uninstallKey)) {

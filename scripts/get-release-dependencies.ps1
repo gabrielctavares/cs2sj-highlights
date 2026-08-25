@@ -78,7 +78,7 @@ $innoArguments = @(
     '/VERYSILENT',
     '/SUPPRESSMSGBOXES',
     '/NORESTART',
-    "/DIR=$innoRoot"
+    "/DIR=`"$innoRoot`""
 )
 $innoProcess = Start-Process -FilePath $downloaded['inno-setup'] -ArgumentList $innoArguments -Wait -PassThru -WindowStyle Hidden
 if ($innoProcess.ExitCode -ne 0) {

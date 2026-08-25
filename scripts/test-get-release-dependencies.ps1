@@ -1,6 +1,6 @@
 $ErrorActionPreference = 'Stop'
 
-$destination = Join-Path ([System.IO.Path]::GetTempPath()) ("cs2sj-dependencies-" + [guid]::NewGuid())
+$destination = Join-Path ([System.IO.Path]::GetTempPath()) ("cs2sj dependencies " + [guid]::NewGuid())
 $pathsOutput = Join-Path ([System.IO.Path]::GetTempPath()) ("cs2sj-dependency-paths-" + [guid]::NewGuid() + '.json')
 
 try {
