@@ -8,6 +8,9 @@ try {
         throw "Arquivos Go sem formatação:`n$unformatted"
     }
 
+    & (Join-Path $PSScriptRoot 'test-release-tools.ps1')
+    if ($LASTEXITCODE -ne 0) { throw 'Testes das ferramentas de release falharam.' }
+
     & go mod verify
     if ($LASTEXITCODE -ne 0) { throw 'go mod verify falhou.' }
 

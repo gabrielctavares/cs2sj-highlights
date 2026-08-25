@@ -1,0 +1,23 @@
+{
+  "schemaVersion": 1,
+  "dependencies": [
+    {
+      "name": "hlae",
+      "version": "2.191.0",
+      "url": "https://github.com/advancedfx/advancedfx/releases/download/v2.191.0/hlae_2_191_0.zip",
+      "sha256": "78efa377a2bac9522c3771a79c2503fec57e106432fc11d32244fe25b7c5b6cc"
+    },
+    {
+      "name": "ffmpeg",
+      "version": "9.0.1",
+      "url": "https://www.gyan.dev/ffmpeg/builds/packages/ffmpeg-9.0.1-essentials_build.zip",
+      "sha256": "fec81ae03971d9dd4be3ebe02e263bd2ec1d789483f931bdba5f5715e65da2e9"
+    },
+    {
+      "name": "inno-setup",
+      "version": "7.1.0",
+      "url": "https://github.com/jrsoftware/issrc/releases/download/is-7_1_0/innosetup-7.1.0-x64.exe",
+      "sha256": "0362a383ed217d4c4239b5933866dd96d3eb2102737da92f80f6057a4b40df2f"
+    }
+  ]
+}
