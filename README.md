@@ -4,16 +4,21 @@ Aplicativo local para Windows que lê demos de Counter-Strike 2, seleciona highl
 
 ## Uso pelo aplicativo
 
-1. Abra a pasta portátil `dist\stage\CS2SJ-Demo` ou extraia todo o conteúdo do ZIP criado a partir dela.
-2. Abra `CS2SJ-Demo.exe`.
-3. Selecione:
+1. Baixe `CS2SJ-Demo-vX.Y.Z-Setup.exe` na página de [Releases](https://github.com/gabrielctavares/cs2sj-highlights/releases).
+2. Execute o instalador; ele funciona offline e não solicita senha de administrador.
+3. Abra **CS2SJ Demo** pelo menu Iniciar.
+4. Selecione:
    - o arquivo `cs2.exe`;
    - a pasta contendo as demos `.dem`;
    - a pasta onde os vídeos serão salvos.
-4. Clique em **Analisar demos**.
-5. Em **Melhores da partida**, confira os lances de maior valor para a narrativa geral; em **Por jogador**, escolha um SteamID e veja suas melhores jogadas individuais.
-6. Escolha a abrangência **Restrita**, **Equilibrada** ou **Ampla**, adicione os lances desejados e confira a aba **Seleção final**.
-7. Clique em **Processar seleção final**.
+5. Clique em **Analisar demos**.
+6. Em **Melhores da partida**, confira os lances de maior valor para a narrativa geral; em **Por jogador**, escolha um SteamID e veja suas melhores jogadas individuais.
+7. Escolha a abrangência **Restrita**, **Equilibrada** ou **Ampla**, adicione os lances desejados e confira a aba **Seleção final**.
+8. Clique em **Processar seleção final**.
+
+Como alternativa portátil, baixe `CS2SJ-Demo-vX.Y.Z-windows-x64.zip`, extraia todo o conteúdo para uma pasta e abra `CS2SJ-Demo.exe`. Não execute o programa de dentro do ZIP, pois HLAE, FFmpeg e os demais arquivos precisam permanecer juntos.
+
+O instalador desta primeira versão ainda não possui assinatura Authenticode. Por isso, o Windows SmartScreen pode exibir um aviso de reputação antes da execução.
 
 Somente itens explicitamente adicionados à seleção final são renderizados. Um mesmo candidato pode aparecer nas duas perspectivas com notas diferentes, mas entra uma única vez na seleção e gera uma única captura. O jogador escolhido fica salvo por SteamID e é pré-selecionado quando estiver presente em uma análise futura.
 
@@ -22,6 +27,12 @@ Não existe limite fixo de clipes. A análise considera multi-kills, clutch, ass
 Os caminhos ficam salvos em `%LocalAppData%\CS2SJ-Demo\config.json`. A análise e a captura rodam em segundo plano, a janela mostra o andamento e permite abrir a pasta dos vídeos ao terminar.
 
 O HLAE 2.191.0, AfxHookSource2, FFmpeg e FFprobe acompanham a pasta portátil. Se o HLAE não for encontrado, copie ou extraia novamente a pasta completa. O botão **Baixar HLAE** abre somente a página oficial: https://github.com/advancedfx/advancedfx/releases/latest
+
+## Atualizar e desinstalar
+
+Para atualizar, baixe e execute o instalador da versão nova. Ele reconhece a instalação existente do usuário e a substitui sem criar uma segunda entrada em **Aplicativos instalados**.
+
+A desinstalação pode ser feita pelo menu Iniciar ou pelas configurações do Windows. Ela remove o programa, mas preserva configurações, temas e outros dados em `%LocalAppData%\CS2SJ-Demo`.
 
 ## Segurança
 
@@ -90,6 +101,40 @@ powershell -ExecutionPolicy Bypass -File .\scripts\package.ps1 `
 O parâmetro `-FFprobePath` é necessário quando a distribuição do HLAE contém `ffmpeg.exe`, mas não contém o utilitário `ffprobe.exe` do mesmo projeto.
 
 Por padrão, o resultado fica em `dist\stage\CS2SJ-Demo`, pronto para uso ou para você compactar quando necessário. Para o script também gerar `dist\CS2SJ-Demo-windows-x64.zip`, acrescente `-CreateZip` ao comando.
+
+## Gerar instalador localmente
+
+Requer Go 1.24.x, Python 3.9 ou mais recente e acesso à internet somente durante a preparação. As versões e os hashes de HLAE, FFmpeg e Inno Setup ficam fixados em `installer\dependencies.json`.
+
+```powershell
+python -m pip install --requirement .\requirements-build.txt
+
+$depsRoot = Join-Path $env:TEMP 'cs2sj-release-dependencies'
+$paths = Join-Path $env:TEMP 'cs2sj-release-dependency-paths.json'
+.\scripts\get-release-dependencies.ps1 `
+  -DestinationRoot $depsRoot `
+  -PathsOutputPath $paths
+
+$deps = Get-Content -Raw -LiteralPath $paths | ConvertFrom-Json
+.\scripts\build-installer.ps1 `
+  -Version '1.0.0' `
+  -HLAEDir $deps.hlaeDir `
+  -FFmpegPath $deps.ffmpegPath `
+  -FFprobePath $deps.ffprobePath `
+  -InnoCompilerPath $deps.innoCompilerPath
+```
+
+O comando cria em `dist` o ZIP portátil, o instalador offline e `SHA256SUMS.txt`.
+
+## Publicar uma release
+
+Crie e publique uma GitHub Release com tag exatamente no formato `vMAJOR.MINOR.PATCH`, por exemplo `v1.0.0`. O workflow Windows valida o código, baixa somente dependências com SHA-256 conferido, gera e testa o instalador e anexa automaticamente:
+
+- `CS2SJ-Demo-vMAJOR.MINOR.PATCH-windows-x64.zip`;
+- `CS2SJ-Demo-vMAJOR.MINOR.PATCH-Setup.exe`;
+- `SHA256SUMS.txt`.
+
+Se qualquer verificação falhar, nenhum arquivo é enviado para a release.
 
 ## CLI opcional
 
