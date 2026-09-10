@@ -13,9 +13,8 @@ try {
 
     New-Item -ItemType Directory -Force -Path 'bin' | Out-Null
 
-    & python '.\scripts\generate_icon.py'
-    if ($LASTEXITCODE -ne 0) {
-        throw 'Não foi possível gerar o ícone do aplicativo a partir do logo da HUD.'
+    if (-not (Test-Path -LiteralPath 'assets\cs2sj-logo.ico' -PathType Leaf)) {
+        throw 'Ícone do aplicativo não encontrado em assets\cs2sj-logo.ico.'
     }
 
     & go run 'github.com/akavel/rsrc@v0.10.2' -arch amd64 -ico 'assets\cs2sj-logo.ico' -manifest 'cmd\cs2sj-demo\cs2sj-demo.exe.manifest' -o 'cmd\cs2sj-demo\rsrc_windows_amd64.syso'

@@ -104,11 +104,9 @@ Por padrão, o resultado fica em `dist\stage\CS2SJ-Demo`, pronto para uso ou par
 
 ## Gerar instalador localmente
 
-Requer Go 1.24.x, Python 3.9 ou mais recente e acesso à internet somente durante a preparação. As versões e os hashes de HLAE, FFmpeg e Inno Setup ficam fixados em `installer\dependencies.json`.
+Requer Go 1.24.x e acesso à internet somente durante a preparação. As versões e os hashes de HLAE, FFmpeg e Inno Setup ficam fixados em `installer\dependencies.json`.
 
 ```powershell
-python -m pip install --requirement .\requirements-build.txt
-
 $depsRoot = Join-Path $env:TEMP 'cs2sj-release-dependencies'
 $paths = Join-Path $env:TEMP 'cs2sj-release-dependency-paths.json'
 .\scripts\get-release-dependencies.ps1 `

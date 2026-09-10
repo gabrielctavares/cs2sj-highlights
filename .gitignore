@@ -9,4 +9,3 @@ coverage.out
 *.mp4
 *.wav
 cmd/cs2sj-demo/rsrc_windows_*.syso
-assets/cs2sj-logo.ico
