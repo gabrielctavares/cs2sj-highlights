@@ -34,6 +34,7 @@ type Options struct {
 	FFprobePath        string
 	HUDLogoPath        string
 	HUDThemePath       string
+	EventName          string
 	HUDMode            model.HUDMode
 	SelectedHighlights map[string][]string
 }
@@ -61,6 +62,7 @@ func ParseArgs(args []string) (Options, error) {
 	flags := flag.NewFlagSet(command, flag.ContinueOnError)
 	flags.SetOutput(io.Discard)
 	flags.StringVar(&options.OutputDir, "output", "", "pasta de saída")
+	flags.StringVar(&options.EventName, "event", "", "nome do campeonato exibido na HUD")
 	if command == "render" {
 		flags.StringVar(&options.HLAEPath, "hlae", "", "caminho para hlae.exe")
 		flags.StringVar(&options.CS2Path, "cs2", "", "caminho para cs2.exe")
@@ -94,8 +96,8 @@ func ParseArgs(args []string) (Options, error) {
 
 func Usage() string {
 	return "Uso:\n" +
-		"  cs2-highlights analyze INPUT_DIR --output OUTPUT_DIR\n" +
-		"  cs2-highlights render  INPUT_DIR --output OUTPUT_DIR [--hud none|game|custom] [--hud-theme HUD_JSON] [--hlae HLAE_EXE] [--cs2 CS2_EXE] [--hook-dll HOOK_DLL] [--ffmpeg FFMPEG_EXE] [--ffprobe FFPROBE_EXE]\n"
+		"  cs2-highlights analyze INPUT_DIR --output OUTPUT_DIR [--event CAMPEONATO]\n" +
+		"  cs2-highlights render  INPUT_DIR --output OUTPUT_DIR [--event CAMPEONATO] [--hud none|game|custom] [--hud-theme HUD_JSON] [--hlae HLAE_EXE] [--cs2 CS2_EXE] [--hook-dll HOOK_DLL] [--ffmpeg FFMPEG_EXE] [--ffprobe FFPROBE_EXE]\n"
 }
 
 func (app App) Run(ctx context.Context, args []string, stdout, stderr io.Writer) int {
@@ -162,7 +164,7 @@ func AnalyzeBatch(ctx context.Context, options Options, logger *slog.Logger) ([]
 	if err := os.MkdirAll(options.OutputDir, 0o755); err != nil {
 		return nil, fmt.Errorf("criar pasta de saída: %w", err)
 	}
-	worker := &pipeline.Pipeline{OutputDir: options.OutputDir, Parser: demos.DemoParser{}, Logger: logger}
+	worker := &pipeline.Pipeline{OutputDir: options.OutputDir, EventName: options.EventName, Parser: demos.DemoParser{}, Logger: logger}
 	return worker.ProcessDirectory(ctx, options.InputDir, false)
 }
 
@@ -191,6 +193,7 @@ func RenderBatch(ctx context.Context, options Options, logger *slog.Logger) ([]p
 	prober := media.Prober{Path: paths.FFprobePath}
 	worker := &pipeline.Pipeline{
 		OutputDir:          paths.OutputDir,
+		EventName:          options.EventName,
 		HUDMode:            options.HUDMode,
 		Parser:             demos.DemoParser{},
 		SelectedHighlights: options.SelectedHighlights,

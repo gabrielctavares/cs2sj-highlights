@@ -483,15 +483,23 @@ func TestChangedDemoHashCausesFreshAnalysis(t *testing.T) {
 
 func TestMatchHUDMetadataFromDemoPath(t *testing.T) {
 	demo := filepath.Join(`G:\campeonatos`, "1º CAMP MONTADO CS2 SJ", "2_1_ONU_vs_G3neration_Z_de_dust2_2026-07-12.dem")
-	got := matchHUDMetadata(demo, "de_dust2", "ONU da demo", "G3 da demo")
+	got := matchHUDMetadata(demo, "", "de_dust2", "ONU da demo", "G3 da demo")
 	if got.Event != "1º CAMP MONTADO CS2 SJ" || got.TeamA != "ONU da demo" || got.TeamB != "G3 da demo" || got.Map != "DUST2" {
 		t.Fatalf("unexpected HUD metadata: %#v", got)
 	}
 }
 
+func TestMatchHUDMetadataUsesEventNameOverride(t *testing.T) {
+	demo := filepath.Join(`G:\campeonatos`, "nome da pasta", "partida.dem")
+	got := matchHUDMetadata(demo, "Final CS2 São José", "de_nuke", "ONU", "G3")
+	if got.Event != "Final CS2 São José" {
+		t.Fatalf("event override was not applied: %#v", got)
+	}
+}
+
 func TestMatchHUDMetadataFallsBackToDemoFileName(t *testing.T) {
 	demo := filepath.Join(`G:\campeonatos`, "evento", "2_1_ONU_vs_G3neration_Z_de_dust2_2026-07-12.dem")
-	got := matchHUDMetadata(demo, "de_dust2", "", "")
+	got := matchHUDMetadata(demo, "", "de_dust2", "", "")
 	if got.TeamA != "ONU" || got.TeamB != "G3neration Z" {
 		t.Fatalf("unexpected fallback HUD metadata: %#v", got)
 	}

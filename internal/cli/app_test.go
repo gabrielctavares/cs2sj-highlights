@@ -43,6 +43,13 @@ func TestParseAnalyze(t *testing.T) {
 	}
 }
 
+func TestParseRenderAcceptsEventName(t *testing.T) {
+	got, err := ParseArgs([]string{"render", `C:\demos`, "--output", `C:\videos`, "--event", "Final CS2 SJ"})
+	if err != nil || got.EventName != "Final CS2 SJ" {
+		t.Fatalf("unexpected args: %#v err=%v", got, err)
+	}
+}
+
 func TestParseRejectsInvalidInvocation(t *testing.T) {
 	tests := [][]string{
 		nil,

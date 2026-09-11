@@ -34,6 +34,7 @@ type StartRequest struct {
 	SelectedHighlights map[string][]string
 	HUDMode            model.HUDMode
 	HUDThemePath       string
+	EventName          string
 	Decisions          []feedback.Decision
 }
 
@@ -106,6 +107,7 @@ func (controller *Controller) run(ctx context.Context, request StartRequest, rep
 		HUDLogoPath:        request.Bundle.LogoPath,
 		HUDMode:            request.HUDMode,
 		HUDThemePath:       request.HUDThemePath,
+		EventName:          request.EventName,
 		SelectedHighlights: request.SelectedHighlights,
 	}, logger)
 

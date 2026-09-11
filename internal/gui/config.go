@@ -11,7 +11,7 @@ import (
 	"github.com/gabrielctavares/cs2sj-highlights/internal/model"
 )
 
-const ConfigSchemaVersion = 2
+const ConfigSchemaVersion = 3
 
 type Config struct {
 	SchemaVersion   int           `json:"schema_version"`
@@ -20,6 +20,7 @@ type Config struct {
 	OutputDir       string        `json:"output_dir"`
 	HUDMode         model.HUDMode `json:"hud_mode,omitempty"`
 	HUDThemePath    string        `json:"hud_theme_path,omitempty"`
+	EventName       string        `json:"event_name,omitempty"`
 	FavoriteSteamID uint64        `json:"favorite_steam_id,omitempty"`
 }
 
@@ -48,7 +49,7 @@ func LoadConfig(path string) (Config, error) {
 		}
 		return Config{}, fmt.Errorf("ler configuração %q: %w", path, err)
 	}
-	if config.SchemaVersion == 1 {
+	if config.SchemaVersion == 1 || config.SchemaVersion == 2 {
 		config.SchemaVersion = ConfigSchemaVersion
 	}
 	if config.SchemaVersion != ConfigSchemaVersion {

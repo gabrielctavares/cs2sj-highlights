@@ -41,6 +41,7 @@ type ManifestStore interface {
 
 type Pipeline struct {
 	OutputDir          string
+	EventName          string
 	Parser             DemoParser
 	Capturer           Capturer
 	Clips              ClipBuilder
@@ -194,7 +195,7 @@ func (pipeline *Pipeline) buildCatalog(timeline model.Timeline) ([]model.Highlig
 }
 
 func (pipeline *Pipeline) prepareCatalog(manifestPath, demoPath string, timeline model.Timeline, catalog []model.Highlight) {
-	hud := matchHUDMetadata(demoPath, timeline.Map, timeline.TeamA, timeline.TeamB)
+	hud := matchHUDMetadata(demoPath, pipeline.EventName, timeline.Map, timeline.TeamA, timeline.TeamB)
 	demoRoot := filepath.Dir(manifestPath)
 	for index := range catalog {
 		catalog[index].Status = model.ClipPending
@@ -223,7 +224,7 @@ func (pipeline *Pipeline) prepareCatalog(manifestPath, demoPath string, timeline
 
 func (pipeline *Pipeline) refreshPresentation(manifestPath, demoPath string, manifest *model.Manifest, migrated bool) bool {
 	changed := false
-	hud := matchHUDMetadata(demoPath, manifest.Map, manifest.TeamA, manifest.TeamB)
+	hud := matchHUDMetadata(demoPath, pipeline.EventName, manifest.Map, manifest.TeamA, manifest.TeamB)
 	for index := range manifest.Highlights {
 		if pipeline.reconcileHUDMode(manifestPath, &manifest.Highlights[index]) {
 			changed = true
@@ -250,12 +251,15 @@ func (pipeline *Pipeline) refreshPresentation(manifestPath, demoPath string, man
 	return changed
 }
 
-func matchHUDMetadata(demoPath, mapName, demoTeamA, demoTeamB string) model.HUDMetadata {
+func matchHUDMetadata(demoPath, eventName, mapName, demoTeamA, demoTeamB string) model.HUDMetadata {
 	metadata := model.HUDMetadata{
-		Event: displayName(filepath.Base(filepath.Dir(demoPath))),
+		Event: displayName(eventName),
 		TeamA: "TIME A",
 		TeamB: "TIME B",
 		Map:   strings.ToUpper(strings.TrimPrefix(mapName, "de_")),
+	}
+	if metadata.Event == "" {
+		metadata.Event = displayName(filepath.Base(filepath.Dir(demoPath)))
 	}
 	base := strings.TrimSuffix(filepath.Base(demoPath), filepath.Ext(demoPath))
 	matchParts := strings.SplitN(base, "_vs_", 2)

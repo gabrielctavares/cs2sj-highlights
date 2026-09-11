@@ -11,8 +11,9 @@ Aplicativo local para Windows que lê demos de Counter-Strike 2, seleciona highl
    - o arquivo `cs2.exe`;
    - a pasta contendo as demos `.dem`;
    - a pasta onde os vídeos serão salvos.
+   - o nome do campeonato, preenchido inicialmente com o nome da pasta das demos e editável antes da análise ou renderização.
 5. Clique em **Analisar demos**.
-6. Em **Melhores da partida**, confira os lances de maior valor para a narrativa geral; em **Por jogador**, escolha um SteamID e veja suas melhores jogadas individuais.
+6. Em **Melhores da partida**, confira os lances de maior valor para a narrativa geral; em **Por jogador**, escolha um SteamID e veja suas melhores jogadas individuais. A coluna **Por que apareceu** e a legenda da tela explicam os fatores e a nota editorial de cada candidato.
 7. Escolha a abrangência **Restrita**, **Equilibrada** ou **Ampla**, adicione os lances desejados e confira a aba **Seleção final**.
 8. Clique em **Processar seleção final**.
 
@@ -66,6 +67,8 @@ As duas opções da tela são exclusivas:
 - nenhuma marcada: captura limpa, sem HUD do jogo e sem HUD personalizada;
 - **Mostrar HUD do jogo**: mantém apenas a HUD nativa do CS2;
 - **Usar HUD personalizada**: usa a captura limpa e adiciona a HUD CS2SJ com campeonato, times, placar no início do round, mapa, round, jogador, tipo do highlight e logo local.
+
+O nome do campeonato pode ser alterado na tela principal. O editor visual da HUD mantém os campos avançados e também oferece uma base guiada com layout e cores coerentes para facilitar ajustes sem remontar o tema inteiro.
 
 O placar é extraído da demo e preserva a identidade dos times mesmo após a troca de lados. Quando ele não puder ser determinado com segurança, a HUD mostra um traço em vez de inventar um valor. A interface de replay, FPS, telemetria e informações de build ficam ocultas em todos os modos.
 
@@ -145,7 +148,10 @@ Sem uma seleção explícita fornecida pela GUI, o comando `render` usa a visão
 ```powershell
 .\bin\cs2-highlights-cli.exe analyze C:\demos --output C:\videos
 
+.\bin\cs2-highlights-cli.exe analyze C:\demos --output C:\videos --event "Final CS2 São José"
+
 .\bin\cs2-highlights-cli.exe render C:\demos --output C:\videos `
+	--event "Final CS2 São José" `
   --hlae C:\HLAE\hlae.exe `
   --cs2 "C:\Program Files (x86)\Steam\steamapps\common\Counter-Strike Global Offensive\game\bin\win64\cs2.exe" `
   --hook-dll C:\HLAE\x64\AfxHookSource2.dll

@@ -45,6 +45,7 @@ type applicationWindow struct {
 	inputEdit      *walk.LineEdit
 	outputEdit     *walk.LineEdit
 	hudThemeEdit   *walk.LineEdit
+	hudEventEdit   *walk.LineEdit
 	statusEdit     *walk.TextEdit
 	editorialTable *walk.TableView
 	playerTable    *walk.TableView
@@ -145,11 +146,22 @@ func clipTableColumns() []TableViewColumn {
 	}
 }
 
+func highlightLegendText() string {
+	return "Tags: ACE elimina os cinco adversários no round. Clutch vence o round em desvantagem. " +
+		"4K e 3K indicam quatro ou três eliminações; HS, Smoke, No-scope, Flash assist e Wallbang descrevem o contexto técnico.\n" +
+		"Nota editorial: combina 70% da nota técnica com contexto como round vencido, entry, trade, clutch, match point, overtime e fim da partida. " +
+		"A coluna ‘Por que apareceu’ mostra os fatores aplicados em cada lance."
+}
+
 func (window *applicationWindow) create(config Config) error {
 	window.editorialModel = newChoiceTableModel()
 	window.playerModel = newChoiceTableModel()
 	window.finalModel = newChoiceTableModel()
 	window.favoriteSteamID = config.FavoriteSteamID
+	eventName := strings.TrimSpace(config.EventName)
+	if eventName == "" {
+		eventName = defaultEventNameFromInput(config.InputDir)
+	}
 	definition := MainWindow{
 		AssignTo: &window.mainWindow,
 		Title:    "CS2SJ Demo - Highlights",
@@ -189,6 +201,8 @@ func (window *applicationWindow) create(config Config) error {
 				Layout: HBox{Spacing: 8},
 				Children: []Widget{
 					PushButton{AssignTo: &window.analyze, Text: "Analisar demos", MinSize: Size{Width: 140, Height: 34}, OnClicked: window.startAnalysis},
+					Label{Text: "Nome do campeonato:"},
+					LineEdit{AssignTo: &window.hudEventEdit, Text: eventName, MinSize: Size{Width: 230}, OnTextChanged: window.invalidatePreview},
 					Label{Text: "Abrangência:"},
 					ComboBox{AssignTo: &window.breadthCombo, Model: []string{"Restrita", "Equilibrada", "Ampla"}, CurrentIndex: 1, Enabled: false, OnCurrentIndexChanged: window.refreshCatalogViews},
 					Label{AssignTo: &window.selection, Text: "Nenhum clipe analisado"},
@@ -215,6 +229,7 @@ func (window *applicationWindow) create(config Config) error {
 					}},
 				},
 			},
+			Label{Text: highlightLegendText()},
 			Label{Text: vacWarning},
 			Composite{
 				Layout: HBox{Spacing: 8},
@@ -275,12 +290,13 @@ func (window *applicationWindow) browseFolder(target *walk.LineEdit, title strin
 
 func (window *applicationWindow) startAnalysis() {
 	values := window.formValues()
+	eventName := window.hudEventName()
 	if err := ValidateForm(values); err != nil {
 		window.showError("Verifique os caminhos", err)
 		return
 	}
 	if err := SaveConfig(window.configPath, Config{
-		CS2Path: values.CS2Path, InputDir: values.InputDir, OutputDir: values.OutputDir, HUDMode: window.hudMode(), HUDThemePath: window.hudThemePath(), FavoriteSteamID: window.favoriteSteamID,
+		CS2Path: values.CS2Path, InputDir: values.InputDir, OutputDir: values.OutputDir, HUDMode: window.hudMode(), HUDThemePath: window.hudThemePath(), EventName: window.hudEventName(), FavoriteSteamID: window.favoriteSteamID,
 	}); err != nil {
 		window.showError("Não foi possível salvar os caminhos", err)
 		return
@@ -295,7 +311,7 @@ func (window *applicationWindow) startAnalysis() {
 
 	go func() {
 		results, err := cli.AnalyzeBatch(analysisContext, cli.Options{
-			Command: "analyze", InputDir: values.InputDir, OutputDir: values.OutputDir,
+			Command: "analyze", InputDir: values.InputDir, OutputDir: values.OutputDir, EventName: eventName,
 		}, nil)
 		var preview *PreviewState
 		if err == nil {
@@ -320,6 +336,9 @@ func (window *applicationWindow) startAnalysis() {
 				return
 			}
 			window.preview = preview
+			if window.hudEventName() == "" {
+				window.hudEventEdit.SetText(window.defaultEventName())
+			}
 			window.loadPlayers()
 			window.refreshCatalogViews()
 			window.appendStatus(fmt.Sprintf("Análise concluída: %d candidato(s) encontrado(s). Adicione à seleção final apenas o que deseja gerar.", len(preview.candidates)))
@@ -360,7 +379,7 @@ func (window *applicationWindow) startProcessing() {
 		window.vacWarningSeen = true
 	}
 	if err := SaveConfig(window.configPath, Config{
-		CS2Path: values.CS2Path, InputDir: values.InputDir, OutputDir: values.OutputDir, HUDMode: window.hudMode(), HUDThemePath: window.hudThemePath(), FavoriteSteamID: window.favoriteSteamID,
+		CS2Path: values.CS2Path, InputDir: values.InputDir, OutputDir: values.OutputDir, HUDMode: window.hudMode(), HUDThemePath: window.hudThemePath(), EventName: window.hudEventName(), FavoriteSteamID: window.favoriteSteamID,
 	}); err != nil {
 		window.showError("Não foi possível salvar os caminhos", err)
 		return
@@ -370,7 +389,7 @@ func (window *applicationWindow) startProcessing() {
 	window.cancelWork = cancel
 	window.setRunning(true)
 	window.appendStatus(fmt.Sprintf("Iniciando processamento de %d clipe(s) na seleção final...", len(choices)))
-	err = window.controller.Start(renderContext, StartRequest{Values: values, Bundle: bundle, SelectedHighlights: selected, HUDMode: window.hudMode(), HUDThemePath: window.hudThemePath(), Decisions: decisions}, window.report)
+	err = window.controller.Start(renderContext, StartRequest{Values: values, Bundle: bundle, SelectedHighlights: selected, HUDMode: window.hudMode(), HUDThemePath: window.hudThemePath(), EventName: window.hudEventName(), Decisions: decisions}, window.report)
 	if err != nil {
 		cancel()
 		window.cancelWork = nil
@@ -398,7 +417,7 @@ func (window *applicationWindow) report(event Event) {
 }
 
 func (window *applicationWindow) setRunning(running bool) {
-	for _, control := range []walk.Widget{window.cs2Edit, window.inputEdit, window.outputEdit, window.cs2Browse, window.inputBrowse, window.outputBrowse, window.analyze, window.editorialTable, window.playerTable, window.finalTable, window.breadthCombo, window.playerCombo, window.gameHUD, window.customHUD} {
+	for _, control := range []walk.Widget{window.cs2Edit, window.inputEdit, window.outputEdit, window.hudEventEdit, window.cs2Browse, window.inputBrowse, window.outputBrowse, window.analyze, window.editorialTable, window.playerTable, window.finalTable, window.breadthCombo, window.playerCombo, window.gameHUD, window.customHUD} {
 		control.SetEnabled(!running)
 	}
 	if running {
@@ -432,6 +451,28 @@ func (window *applicationWindow) hudThemePath() string {
 		return ""
 	}
 	return strings.TrimSpace(window.hudThemeEdit.Text())
+}
+
+func (window *applicationWindow) hudEventName() string {
+	if window.hudEventEdit == nil {
+		return ""
+	}
+	return strings.TrimSpace(window.hudEventEdit.Text())
+}
+
+func defaultEventNameFromInput(inputDir string) string {
+	clean := filepath.Clean(strings.TrimSpace(inputDir))
+	if clean == "" || clean == "." {
+		return ""
+	}
+	return filepath.Base(clean)
+}
+
+func (window *applicationWindow) defaultEventName() string {
+	if window.preview != nil && len(window.preview.candidates) > 0 {
+		return filepath.Base(filepath.Dir(window.preview.candidates[0].choice.DemoPath))
+	}
+	return defaultEventNameFromInput(window.inputEdit.Text())
 }
 
 func (window *applicationWindow) browseHUDTheme() {
@@ -647,7 +688,7 @@ func (window *applicationWindow) playerChanged() {
 		window.favoriteSteamID = steamID
 		values := window.formValues()
 		if err := SaveConfig(window.configPath, Config{
-			CS2Path: values.CS2Path, InputDir: values.InputDir, OutputDir: values.OutputDir, HUDMode: window.hudMode(), HUDThemePath: window.hudThemePath(), FavoriteSteamID: window.favoriteSteamID,
+			CS2Path: values.CS2Path, InputDir: values.InputDir, OutputDir: values.OutputDir, HUDMode: window.hudMode(), HUDThemePath: window.hudThemePath(), EventName: window.hudEventName(), FavoriteSteamID: window.favoriteSteamID,
 		}); err != nil {
 			window.appendStatus("Aviso: não foi possível salvar o jogador favorito: " + err.Error())
 		}
