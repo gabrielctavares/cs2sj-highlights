@@ -8,10 +8,10 @@ import (
 
 func TestValuesForUsesHighlightData(t *testing.T) {
 	values := ValuesFor(model.Highlight{
-		Round: 18, Player: model.Player{Name: "Gabi"}, Tags: []string{"ACE"},
+		Round: 18, Player: model.Player{Name: "Gabi"}, Tags: []string{"HEADSHOT", "MATCH_POINT", "MATCH_END"},
 		HUD: model.HUDMetadata{Event: "Final", TeamA: "ONU", TeamB: "Tedesco", ScoreA: 3, ScoreB: 2, ScoreKnown: true, Map: "NUKE"},
 	})
-	if values[TeamAName] != "ONU" || values[ScoreB] != "2" || values[Highlight] != "ACE" || values[Round] != "ROUND 18" {
+	if values[TeamAName] != "ONU" || values[ScoreB] != "2" || values[Highlight] != "Headshot" || values[Round] != "ROUND 18" {
 		t.Fatalf("unexpected values: %#v", values)
 	}
 }

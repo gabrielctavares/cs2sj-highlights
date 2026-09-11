@@ -17,7 +17,7 @@ import (
 
 func TestTitleText(t *testing.T) {
 	highlight := model.Highlight{Player: model.Player{Name: "Ana; quit"}, Tags: []string{"ACE", "CLUTCH"}}
-	if got := TitleText(highlight); got != "Ana; quit — ACE · CLUTCH" {
+	if got := TitleText(highlight); got != "Ana; quit — Ace" {
 		t.Fatalf("unexpected title %q", got)
 	}
 }
@@ -117,7 +117,7 @@ func TestClipBuilderBuildsHorizontalOnly(t *testing.T) {
 	}
 	for suffix, want := range map[string]string{
 		"-event.txt": "1º CAMP MONTADO CS2 SJ", "-team-a.txt": "ONU", "-team-b.txt": "G3neration Z", "-score-a.txt": "8", "-score-b.txt": "4",
-		"-map.txt": "ANCIENT", "-round.txt": "ROUND 0", "-player.txt": "Ana; quit", "-highlight.txt": "ACE + CLUTCH",
+		"-map.txt": "ANCIENT", "-round.txt": "ROUND 0", "-player.txt": "Ana; quit", "-highlight.txt": "Ace",
 	} {
 		if hudTexts[suffix] != want {
 			t.Errorf("unexpected HUD text %s: %q", suffix, hudTexts[suffix])

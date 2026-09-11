@@ -8,38 +8,45 @@ import (
 	"path/filepath"
 	"strconv"
 	"strings"
+	"unsafe"
 
 	"github.com/gabrielctavares/cs2sj-highlights/internal/hudtheme"
 	"github.com/lxn/walk"
 	. "github.com/lxn/walk/declarative"
+	"github.com/lxn/win"
 )
 
 type themeEditorWindow struct {
-	path     string
-	state    EditorState
-	dialog   *walk.Dialog
-	canvas   *walk.CustomWidget
-	layers   *walk.ListBox
-	name     *walk.Label
-	text     *walk.LineEdit
-	binding  *walk.LineEdit
-	fontSize *walk.LineEdit
-	anchor   *walk.LineEdit
-	opacity  *walk.LineEdit
-	asset    *walk.LineEdit
-	color    *walk.LineEdit
-	x        *walk.LineEdit
-	y        *walk.LineEdit
-	width    *walk.LineEdit
-	height   *walk.LineEdit
-	visible  *walk.CheckBox
-	teamA    *walk.ComboBox
-	teamB    *walk.ComboBox
-	dragging bool
-	resizing bool
-	lastX    float64
-	lastY    float64
-	updating bool
+	path         string
+	state        EditorState
+	dialog       *walk.Dialog
+	canvas       *walk.CustomWidget
+	layers       *walk.ListBox
+	name         *walk.Label
+	text         *walk.LineEdit
+	binding      *walk.LineEdit
+	fontSize     *walk.LineEdit
+	anchor       *walk.LineEdit
+	opacity      *walk.LineEdit
+	asset        *walk.LineEdit
+	color        *walk.LineEdit
+	x            *walk.LineEdit
+	y            *walk.LineEdit
+	width        *walk.LineEdit
+	height       *walk.LineEdit
+	visible      *walk.CheckBox
+	teamAButton  *walk.PushButton
+	teamBButton  *walk.PushButton
+	teamASwatch  *walk.CustomWidget
+	teamBSwatch  *walk.CustomWidget
+	teamAColor   string
+	teamBColor   string
+	customColors [16]win.COLORREF
+	dragging     bool
+	resizing     bool
+	lastX        float64
+	lastY        float64
+	updating     bool
 }
 
 func (window *applicationWindow) openHUDThemeEditor() {
@@ -65,16 +72,29 @@ func RunThemeEditor(owner walk.Form, path string) error {
 		return err
 	}
 	ApplyGuidedLayout(&theme)
-	editor := &themeEditorWindow{path: path, state: NewEditorState(theme)}
-	teamAIndex := paletteIndex(findGuidedElement(theme, "team-a-panel").Color, TeamBlue)
-	teamBIndex := paletteIndex(findGuidedElement(theme, "team-b-panel").Color, TeamOrange)
+	editor := &themeEditorWindow{
+		path: path, state: NewEditorState(theme),
+		teamAColor:   teamColor(theme, "team-a-panel", "#1D4ED8"),
+		teamBColor:   teamColor(theme, "team-b-panel", "#EA580C"),
+		customColors: defaultCustomColors(),
+	}
 	_, err = (Dialog{AssignTo: &editor.dialog, Title: "Editor visual de HUD — 16:9", MinSize: Size{Width: 1180, Height: 720}, Layout: HBox{Margins: Margins{Left: 12, Top: 12, Right: 12, Bottom: 12}, Spacing: 10}, Children: []Widget{
 		Composite{MinSize: Size{Width: 200}, Layout: VBox{Spacing: 6}, Children: []Widget{
 			Label{Text: "Cores dos times"},
-			Label{Text: "Time A"},
-			ComboBox{AssignTo: &editor.teamA, Model: paletteLabels(), CurrentIndex: teamAIndex, OnCurrentIndexChanged: editor.applySelectedTeamColors},
-			Label{Text: "Time B"},
-			ComboBox{AssignTo: &editor.teamB, Model: paletteLabels(), CurrentIndex: teamBIndex, OnCurrentIndexChanged: editor.applySelectedTeamColors},
+			Composite{MinSize: Size{Height: 28}, MaxSize: Size{Height: 28}, Layout: HBox{Spacing: 6}, Children: []Widget{
+				Label{Text: "Time A", MinSize: Size{Width: 45}, MaxSize: Size{Width: 45}},
+				CustomWidget{AssignTo: &editor.teamASwatch, MinSize: Size{Width: 22, Height: 22}, MaxSize: Size{Width: 22, Height: 22}, Paint: func(canvas *walk.Canvas, bounds walk.Rectangle) error {
+					return paintColorSwatch(canvas, bounds, editor.teamAColor)
+				}, PaintMode: PaintBuffered},
+				PushButton{AssignTo: &editor.teamAButton, Text: editor.teamAColor, ToolTipText: "Escolher cor do Time A", MinSize: Size{Width: 92}, MaxSize: Size{Width: 92}, OnClicked: func() { editor.chooseTeamColor(true) }},
+			}},
+			Composite{MinSize: Size{Height: 28}, MaxSize: Size{Height: 28}, Layout: HBox{Spacing: 6}, Children: []Widget{
+				Label{Text: "Time B", MinSize: Size{Width: 45}, MaxSize: Size{Width: 45}},
+				CustomWidget{AssignTo: &editor.teamBSwatch, MinSize: Size{Width: 22, Height: 22}, MaxSize: Size{Width: 22, Height: 22}, Paint: func(canvas *walk.Canvas, bounds walk.Rectangle) error {
+					return paintColorSwatch(canvas, bounds, editor.teamBColor)
+				}, PaintMode: PaintBuffered},
+				PushButton{AssignTo: &editor.teamBButton, Text: editor.teamBColor, ToolTipText: "Escolher cor do Time B", MinSize: Size{Width: 92}, MaxSize: Size{Width: 92}, OnClicked: func() { editor.chooseTeamColor(false) }},
+			}},
 			Label{Text: "Camadas"}, ListBox{AssignTo: &editor.layers, Model: editor.layerNames(), StretchFactor: 1, OnCurrentIndexChanged: editor.selectLayer},
 			PushButton{Text: "+ Caixa", OnClicked: func() { editor.add(hudtheme.Box) }}, PushButton{Text: "+ Texto", OnClicked: func() { editor.add(hudtheme.Text) }}, PushButton{Text: "+ Imagem", OnClicked: editor.addImage}, PushButton{Text: "Subir camada", OnClicked: func() { editor.moveLayer(1) }}, PushButton{Text: "Descer camada", OnClicked: func() { editor.moveLayer(-1) }}, PushButton{Text: "Remover", OnClicked: editor.remove},
 		}},
@@ -125,11 +145,32 @@ func (editor *themeEditorWindow) add(kind hudtheme.ElementType) {
 		editor.refresh()
 	}
 }
-func (editor *themeEditorWindow) applySelectedTeamColors() {
-	if editor.updating || editor.teamA == nil || editor.teamB == nil || editor.teamA.CurrentIndex() < 0 || editor.teamB.CurrentIndex() < 0 {
+func (editor *themeEditorWindow) chooseTeamColor(teamA bool) {
+	color := editor.teamBColor
+	if teamA {
+		color = editor.teamAColor
+	}
+	choice := win.CHOOSECOLOR{
+		LStructSize:  uint32(unsafe.Sizeof(win.CHOOSECOLOR{})),
+		HwndOwner:    editor.dialog.Handle(),
+		RgbResult:    colorRef(color),
+		LpCustColors: &editor.customColors,
+		Flags:        win.CC_ANYCOLOR | win.CC_FULLOPEN | win.CC_RGBINIT,
+	}
+	if !win.ChooseColor(&choice) {
 		return
 	}
-	ApplyPalette(&editor.state.Theme, paletteAt(editor.teamA.CurrentIndex()), paletteAt(editor.teamB.CurrentIndex()))
+	selected := hexColor(choice.RgbResult)
+	if teamA {
+		editor.teamAColor = selected
+		editor.teamAButton.SetText(selected)
+		editor.teamASwatch.Invalidate()
+	} else {
+		editor.teamBColor = selected
+		editor.teamBButton.SetText(selected)
+		editor.teamBSwatch.Invalidate()
+	}
+	ApplyTeamColors(&editor.state.Theme, editor.teamAColor, editor.teamBColor)
 	editor.refresh()
 }
 func (editor *themeEditorWindow) moveLayer(direction int) {
@@ -353,6 +394,48 @@ func (editor *themeEditorWindow) paint(canvas *walk.Canvas, bounds walk.Rectangl
 func (editor *themeEditorWindow) rect(element hudtheme.Element, bounds walk.Rectangle) walk.Rectangle {
 	return walk.Rectangle{X: int(element.X / 100 * float64(bounds.Width)), Y: int(element.Y / 100 * float64(bounds.Height)), Width: max(1, int(element.Width/100*float64(bounds.Width))), Height: max(1, int(element.Height/100*float64(bounds.Height)))}
 }
+
+func paintColorSwatch(canvas *walk.Canvas, bounds walk.Rectangle, value string) error {
+	brush, err := walk.NewSolidColorBrush(previewColor(value))
+	if err != nil {
+		return err
+	}
+	defer brush.Dispose()
+	if err = canvas.FillRectangle(brush, bounds); err != nil {
+		return err
+	}
+	pen, err := walk.NewCosmeticPen(walk.PenSolid, walk.RGB(220, 226, 232))
+	if err != nil {
+		return err
+	}
+	defer pen.Dispose()
+	return canvas.DrawRectangle(pen, walk.Rectangle{X: bounds.X, Y: bounds.Y, Width: max(1, bounds.Width-1), Height: max(1, bounds.Height-1)})
+}
+
+func colorRef(value string) win.COLORREF {
+	value = normalizeTeamColor(value, "#111827")
+	number, _ := strconv.ParseUint(value[1:], 16, 24)
+	return win.RGB(byte(number>>16), byte(number>>8), byte(number))
+}
+
+func hexColor(value win.COLORREF) string {
+	return fmt.Sprintf("#%02X%02X%02X", byte(value), byte(value>>8), byte(value>>16))
+}
+
+func defaultCustomColors() [16]win.COLORREF {
+	values := []string{
+		"#1D4ED8", "#0369A1", "#0E7490", "#0F766E",
+		"#16A34A", "#A16207", "#EA580C", "#DC2626",
+		"#BE185D", "#A21CAF", "#7C3AED", "#4338CA",
+		"#475569", "#111827", "#FFFFFF", "#000000",
+	}
+	var colors [16]win.COLORREF
+	for index, value := range values {
+		colors[index] = colorRef(value)
+	}
+	return colors
+}
+
 func previewColor(value string) walk.Color {
 	var red, green, blue uint8 = 245, 245, 245
 	_, _ = fmt.Sscanf(value, "#%02x%02x%02x", &red, &green, &blue)

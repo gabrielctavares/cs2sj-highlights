@@ -345,3 +345,32 @@ func PrimaryTag(tags []string) string {
 	}
 	return "HIGHLIGHT"
 }
+
+func PrimaryTagLabel(tags []string) string {
+	tag := PrimaryTag(tags)
+	labels := map[string]string{
+		"ACE":           "Ace",
+		"4K":            "4K",
+		"3K":            "3K",
+		"GRENADE_MULTI": "Multi-kill de granada",
+		"NO_SCOPE":      "No-scope",
+		"WALLBANG":      "Wallbang",
+		"SMOKE_KILL":    "Abate pela smoke",
+		"HEADSHOT":      "Headshot",
+		"FLASH_ASSIST":  "Assistência de flash",
+		"LONG_RANGE":    "Longa distância",
+		"FAST_MULTI":    "Sequência rápida",
+		"ENTRY":         "Entry",
+		"TRADE":         "Trade",
+		"LOW_HP":        "Pouca vida",
+		"ASSIST":        "Assistência",
+		"HIGHLIGHT":     "Highlight",
+	}
+	if label, ok := labels[tag]; ok {
+		return label
+	}
+	if strings.HasPrefix(tag, "CLUTCH_1V") {
+		return "Clutch 1v" + strings.TrimPrefix(tag, "CLUTCH_1V")
+	}
+	return "Highlight"
+}

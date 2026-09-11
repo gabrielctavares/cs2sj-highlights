@@ -3,6 +3,7 @@ package highlights
 import (
 	"fmt"
 	"sort"
+	"strings"
 
 	"github.com/gabrielctavares/cs2sj-highlights/internal/model"
 )
@@ -70,7 +71,7 @@ func Generate(timeline model.Timeline, rules Rules) ([]model.Highlight, []model.
 				for end < len(stream.actions) && stream.actions[end].kill.Tick-stream.actions[end-1].kill.Tick <= gap {
 					end++
 				}
-				candidate, discard, ok := buildGeneratedCandidate(round, stream.player, stream.actions[start:end], timeline.TickRate, rules)
+				candidate, discard, ok := buildGeneratedCandidate(round, stream.player, stream.actions[start:end], timeline.TeamA, timeline.TeamB, timeline.TickRate, rules)
 				if discard.Code != "" {
 					discards = append(discards, discard)
 				}
@@ -95,7 +96,7 @@ func Generate(timeline model.Timeline, rules Rules) ([]model.Highlight, []model.
 	return candidates, discards
 }
 
-func buildGeneratedCandidate(round model.Round, player model.Player, actions []candidateAction, tickRate float64, rules Rules) (model.Highlight, model.CandidateDiscard, bool) {
+func buildGeneratedCandidate(round model.Round, player model.Player, actions []candidateAction, teamA, teamB string, tickRate float64, rules Rules) (model.Highlight, model.CandidateDiscard, bool) {
 	discard := model.CandidateDiscard{Round: round.Number, Player: player}
 	if len(actions) == 0 {
 		discard.Code = "empty_window"
@@ -130,7 +131,13 @@ func buildGeneratedCandidate(round model.Round, player model.Player, actions []c
 		return model.Highlight{}, discard, false
 	}
 	kills := make([]model.Kill, 0, len(actions))
-	context := model.CandidateContext{WonRound: player.Team == round.Winner, MatchPoint: round.MatchPoint, MatchEnd: round.MatchEnd, Overtime: round.Overtime}
+	wonRound := player.Team == round.Winner
+	context := model.CandidateContext{
+		WonRound:   wonRound,
+		MatchPoint: wonRound && playerTeamAtMatchPoint(round, player, teamA, teamB),
+		MatchEnd:   wonRound && round.MatchEnd,
+		Overtime:   round.Overtime,
+	}
 	for _, action := range actions {
 		kills = append(kills, action.kill)
 		if action.isKill {
@@ -148,6 +155,21 @@ func buildGeneratedCandidate(round model.Round, player model.Player, actions []c
 		StartTick: start, EndTick: end, Actions: kills, Context: context, Status: model.ClipPending,
 		ActionOffsets: actionOffsets(kills, start, end, tickRate),
 	}, model.CandidateDiscard{}, true
+}
+
+func playerTeamAtMatchPoint(round model.Round, player model.Player, teamA, teamB string) bool {
+	if !round.MatchPoint || !round.ScoreKnown {
+		return false
+	}
+	teamName := strings.TrimSpace(player.TeamName)
+	switch {
+	case teamName != "" && strings.EqualFold(teamName, strings.TrimSpace(teamA)):
+		return round.ScoreA > round.ScoreB
+	case teamName != "" && strings.EqualFold(teamName, strings.TrimSpace(teamB)):
+		return round.ScoreB > round.ScoreA
+	default:
+		return false
+	}
 }
 
 func candidateIdentity(player model.Player) (string, bool) {

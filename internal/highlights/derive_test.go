@@ -9,12 +9,14 @@ import (
 
 func TestEnrichAddsDirectAndDerivedTags(t *testing.T) {
 	protagonist := player("ana", model.TeamT, 1)
+	protagonist.TeamName = "Time A"
 	victim := player("bia", model.TeamCT, 2)
-	round := model.Round{Number: 1, LiveTick: 100, EndTick: 1000, Winner: model.TeamT, MatchPoint: true, Overtime: 1, Kills: []model.Kill{{
+	victim.TeamName = "Time B"
+	round := model.Round{Number: 1, LiveTick: 100, EndTick: 1000, Winner: model.TeamT, ScoreA: 15, ScoreB: 12, ScoreKnown: true, MatchPoint: true, Overtime: 1, Kills: []model.Kill{{
 		Tick: 300, Killer: protagonist, Victim: victim, Weapon: "AK-47", IsHeadshot: true,
 		PenetratedObjects: 1, ThroughSmoke: true, AttackerBlind: true, Distance: 1700, DistanceKnown: true, KillerHealth: 12,
 	}}}
-	candidates, _ := Generate(model.Timeline{TickRate: 64, Rounds: []model.Round{round}}, DefaultRules())
+	candidates, _ := Generate(model.Timeline{TeamA: "Time A", TeamB: "Time B", TickRate: 64, Rounds: []model.Round{round}}, DefaultRules())
 	got := Enrich(round, candidates[0], 64, DefaultRules())
 	for _, tag := range []string{"HEADSHOT", "WALLBANG", "SMOKE_KILL", "BLIND_KILL", "LONG_RANGE", "ENTRY", "LOW_HP", "MATCH_POINT", "OVERTIME"} {
 		if !slices.Contains(got.Tags, tag) {
@@ -68,4 +70,40 @@ func TestEnrichKeepsFlashAssistSeparateFromKillMerit(t *testing.T) {
 		}
 	}
 	t.Fatal("assist candidate missing")
+}
+
+func TestEnrichOmitsOpponentMatchPointAndLostMatchEnd(t *testing.T) {
+	protagonist := player("RFL", model.TeamCT, 1)
+	protagonist.TeamName = "ONU"
+	victim := player("mmT", model.TeamT, 2)
+	victim.TeamName = "Tedesco"
+	round := model.Round{
+		Number: 13, LiveTick: 100, EndTick: 1000, Winner: model.TeamT,
+		ScoreA: 12, ScoreB: 0, ScoreKnown: true, MatchPoint: true, MatchEnd: true,
+		Kills: []model.Kill{{Tick: 300, Killer: protagonist, Victim: victim, Weapon: "P2000", IsHeadshot: true}},
+	}
+	catalog, _ := BuildCatalog(model.Timeline{TeamA: "Tedesco", TeamB: "ONU", TickRate: 64, Rounds: []model.Round{round}}, DefaultRules())
+	if len(catalog) != 1 {
+		t.Fatalf("catalog = %#v", catalog)
+	}
+	got := catalog[0]
+	if !slices.Contains(got.Tags, "HEADSHOT") || slices.Contains(got.Tags, "MATCH_POINT") || slices.Contains(got.Tags, "MATCH_END") {
+		t.Fatalf("irrelevant match context in tags: %#v", got.Tags)
+	}
+}
+
+func TestEnrichKeepsWinningCloseoutContext(t *testing.T) {
+	protagonist := player("mdk", model.TeamT, 1)
+	protagonist.TeamName = "Tedesco"
+	victim := player("RFL", model.TeamCT, 2)
+	victim.TeamName = "ONU"
+	round := model.Round{
+		Number: 13, LiveTick: 100, EndTick: 1000, Winner: model.TeamT,
+		ScoreA: 12, ScoreB: 0, ScoreKnown: true, MatchPoint: true, MatchEnd: true,
+		Kills: []model.Kill{{Tick: 300, Killer: protagonist, Victim: victim, Weapon: "Glock-18", IsHeadshot: true}},
+	}
+	catalog, _ := BuildCatalog(model.Timeline{TeamA: "Tedesco", TeamB: "ONU", TickRate: 64, Rounds: []model.Round{round}}, DefaultRules())
+	if len(catalog) != 1 || !slices.Contains(catalog[0].Tags, "MATCH_POINT") || !slices.Contains(catalog[0].Tags, "MATCH_END") {
+		t.Fatalf("winning closeout context missing: %#v", catalog)
+	}
 }

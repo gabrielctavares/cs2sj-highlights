@@ -9,6 +9,7 @@ import (
 	"strconv"
 	"strings"
 
+	"github.com/gabrielctavares/cs2sj-highlights/internal/highlights"
 	"github.com/gabrielctavares/cs2sj-highlights/internal/hudtheme"
 	"github.com/gabrielctavares/cs2sj-highlights/internal/model"
 	"github.com/gabrielctavares/cs2sj-highlights/internal/subprocess"
@@ -27,11 +28,7 @@ type ClipBuilder struct {
 }
 
 func TitleText(highlight model.Highlight) string {
-	tags := strings.Join(highlight.Tags, " · ")
-	if tags == "" {
-		tags = "HIGHLIGHT"
-	}
-	return highlight.Player.Name + " — " + tags
+	return highlight.Player.Name + " — " + highlights.PrimaryTagLabel(highlight.Tags)
 }
 
 type hudText struct {
@@ -62,10 +59,7 @@ func tournamentHUDText(highlight model.Highlight) hudText {
 	if mapName == "" {
 		mapName = "MAPA"
 	}
-	tags := strings.Join(highlight.Tags, " + ")
-	if tags == "" {
-		tags = "HIGHLIGHT"
-	}
+	tag := highlights.PrimaryTagLabel(highlight.Tags)
 	scoreA, scoreB := "–", "–"
 	if highlight.HUD.ScoreKnown {
 		scoreA = strconv.Itoa(highlight.HUD.ScoreA)
@@ -74,7 +68,7 @@ func tournamentHUDText(highlight model.Highlight) hudText {
 	return hudText{
 		Event: limitText(event, 48), TeamA: limitText(teamA, 24), TeamB: limitText(teamB, 24),
 		ScoreA: scoreA, ScoreB: scoreB, Map: limitText(mapName, 18), Round: fmt.Sprintf("ROUND %d", highlight.Round),
-		Player: limitText(highlight.Player.Name, 28), Highlight: limitText(tags, 36),
+		Player: limitText(highlight.Player.Name, 28), Highlight: limitText(tag, 36),
 	}
 }
 

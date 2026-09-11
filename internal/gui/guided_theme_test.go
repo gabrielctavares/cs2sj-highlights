@@ -1,8 +1,9 @@
 package gui
 
 import (
-	"github.com/gabrielctavares/cs2sj-highlights/internal/hudtheme"
 	"testing"
+
+	"github.com/gabrielctavares/cs2sj-highlights/internal/hudtheme"
 )
 
 func TestApplyGuidedLayoutKeepsScoreboardSlotsApart(t *testing.T) {
@@ -15,19 +16,21 @@ func TestApplyGuidedLayoutKeepsScoreboardSlotsApart(t *testing.T) {
 	}
 }
 
-func TestApplyPaletteUpdatesTeamColors(t *testing.T) {
+func TestApplyTeamColorsAcceptsAnyHexColor(t *testing.T) {
 	theme := hudtheme.DefaultTheme()
-	ApplyPalette(&theme, TeamBlue, TeamOrange)
-	if findGuidedElement(theme, "team-a-panel").Color != "#1D4ED8" || findGuidedElement(theme, "team-b-panel").Color != "#EA580C" {
-		t.Fatal("palette was not applied")
+	ApplyTeamColors(&theme, "#12abef", "#fedc34")
+	if findGuidedElement(theme, "team-a-panel").Color != "#12ABEF" || findGuidedElement(theme, "team-b-panel").Color != "#FEDC34" {
+		t.Fatal("team colors were not applied")
 	}
 }
 
-func TestPaletteIndexSupportsIndependentTeamColors(t *testing.T) {
-	if got := paletteAt(paletteIndex("#16A34A", TeamBlue)); got != TeamGreen {
-		t.Fatalf("palette = %q, want %q", got, TeamGreen)
+func TestApplyTeamColorsRejectsInvalidValues(t *testing.T) {
+	theme := hudtheme.DefaultTheme()
+	ApplyTeamColors(&theme, "invalid", "#123")
+	if got := teamColor(theme, "team-a-panel", "#000000"); got != "#1D4ED8" {
+		t.Fatalf("team A fallback = %q", got)
 	}
-	if got := paletteAt(paletteIndex("#unknown", TeamPurple)); got != TeamPurple {
-		t.Fatalf("fallback palette = %q, want %q", got, TeamPurple)
+	if got := teamColor(theme, "team-b-panel", "#000000"); got != "#EA580C" {
+		t.Fatalf("team B fallback = %q", got)
 	}
 }

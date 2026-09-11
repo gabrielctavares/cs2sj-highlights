@@ -11,8 +11,8 @@ import (
 func Enrich(round model.Round, candidate model.Highlight, tickRate float64, rules Rules) model.Highlight {
 	context := candidate.Context
 	context.WonRound = candidate.Player.Team == round.Winner
-	context.MatchPoint = round.MatchPoint
-	context.MatchEnd = round.MatchEnd
+	context.MatchPoint = context.MatchPoint && context.WonRound
+	context.MatchEnd = context.MatchEnd && context.WonRound
 	context.Overtime = round.Overtime
 
 	protagonistKills := make([]model.Kill, 0, len(candidate.Actions))

@@ -1,47 +1,11 @@
 package gui
 
 import (
+	"strconv"
 	"strings"
 
 	"github.com/gabrielctavares/cs2sj-highlights/internal/hudtheme"
 )
-
-type TeamPalette string
-
-const (
-	TeamBlue   TeamPalette = "blue"
-	TeamOrange TeamPalette = "orange"
-	TeamRed    TeamPalette = "red"
-	TeamGreen  TeamPalette = "green"
-	TeamPurple TeamPalette = "purple"
-)
-
-var teamPalettes = []TeamPalette{TeamBlue, TeamOrange, TeamRed, TeamGreen, TeamPurple}
-
-func paletteLabels() []string {
-	return []string{"Azul", "Laranja", "Vermelho", "Verde", "Roxo"}
-}
-
-func paletteAt(index int) TeamPalette {
-	if index < 0 || index >= len(teamPalettes) {
-		return TeamBlue
-	}
-	return teamPalettes[index]
-}
-
-func paletteIndex(color string, fallback TeamPalette) int {
-	for index, palette := range teamPalettes {
-		if strings.EqualFold(paletteColor(palette), strings.TrimSpace(color)) {
-			return index
-		}
-	}
-	for index, palette := range teamPalettes {
-		if palette == fallback {
-			return index
-		}
-	}
-	return 0
-}
 
 func ApplyGuidedLayout(theme *hudtheme.Theme) {
 	ensureGuidedPanels(theme)
@@ -73,25 +37,27 @@ func ensureGuidedPanels(theme *hudtheme.Theme) {
 	ensureGuidedBox(theme, "team-b-panel", 60, 4, 22, 8, "#EA580C")
 	ensureGuidedBox(theme, "score-panel", 40, 4, 20, 8, "#111827")
 }
-func ApplyPalette(theme *hudtheme.Theme, a, b TeamPalette) {
+func ApplyTeamColors(theme *hudtheme.Theme, teamA, teamB string) {
 	ensureGuidedPanels(theme)
-	findGuidedElement(*theme, "team-a-panel").Color = paletteColor(a)
-	findGuidedElement(*theme, "team-b-panel").Color = paletteColor(b)
+	findGuidedElement(*theme, "team-a-panel").Color = normalizeTeamColor(teamA, "#1D4ED8")
+	findGuidedElement(*theme, "team-b-panel").Color = normalizeTeamColor(teamB, "#EA580C")
 }
-func paletteColor(p TeamPalette) string {
-	switch p {
-	case TeamBlue:
-		return "#1D4ED8"
-	case TeamOrange:
-		return "#EA580C"
-	case TeamRed:
-		return "#DC2626"
-	case TeamGreen:
-		return "#16A34A"
-	case TeamPurple:
-		return "#7C3AED"
+
+func teamColor(theme hudtheme.Theme, panelID, fallback string) string {
+	if panel := findGuidedElement(theme, panelID); panel != nil {
+		return normalizeTeamColor(panel.Color, fallback)
 	}
-	return "#111827"
+	return fallback
+}
+
+func normalizeTeamColor(color, fallback string) string {
+	color = strings.ToUpper(strings.TrimSpace(color))
+	if len(color) == 7 && color[0] == '#' {
+		if _, err := strconv.ParseUint(color[1:], 16, 24); err == nil {
+			return color
+		}
+	}
+	return strings.ToUpper(fallback)
 }
 func ensureGuidedBox(theme *hudtheme.Theme, id string, x, y, w, h float64, color string) {
 	if findGuidedElement(*theme, id) != nil {

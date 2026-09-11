@@ -82,6 +82,15 @@ func TestSelectFourK(t *testing.T) {
 	}
 }
 
+func TestPrimaryTagLabelUsesOnlyMostRelevantTag(t *testing.T) {
+	if got := PrimaryTagLabel([]string{"HEADSHOT", "MATCH_POINT", "MATCH_END"}); got != "Headshot" {
+		t.Fatalf("label = %q", got)
+	}
+	if got := PrimaryTagLabel([]string{"CLUTCH_1V2", "HEADSHOT"}); got != "Clutch 1v2" {
+		t.Fatalf("clutch label = %q", got)
+	}
+}
+
 func TestSelectAceDoesNotIncludeLowerMultiKillTags(t *testing.T) {
 	round := roundWithKills(1, 500, 2200, player("ace", model.TeamCT, 1), []int{800, 900, 1000, 1100, 1200})
 	got := Select(model.Timeline{TickRate: 64, Rounds: []model.Round{round}}, DefaultRules())
