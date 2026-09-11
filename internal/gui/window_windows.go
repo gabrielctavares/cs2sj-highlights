@@ -185,8 +185,9 @@ func (window *applicationWindow) create(config Config) error {
 		},
 		Children: []Widget{
 			Composite{
-				MaxSize: Size{Height: 62},
-				Layout:  Grid{Columns: 6, Spacing: 6},
+				MinSize: Size{Height: 54},
+				MaxSize: Size{Height: 54},
+				Layout:  Grid{Columns: 6, Spacing: 2},
 				Children: []Widget{
 					Label{Text: "CS2 (cs2.exe)"},
 					LineEdit{AssignTo: &window.cs2Edit, Text: config.CS2Path, StretchFactor: 1, ColumnSpan: 4},
@@ -200,8 +201,9 @@ func (window *applicationWindow) create(config Config) error {
 				},
 			},
 			Composite{
-				MaxSize: Size{Height: 62},
-				Layout:  Grid{Columns: 4, Spacing: 6},
+				MinSize: Size{Height: 54},
+				MaxSize: Size{Height: 54},
+				Layout:  Grid{Columns: 4, Spacing: 2},
 				Children: []Widget{
 					Label{Text: "HUD do vídeo:"},
 					CheckBox{AssignTo: &window.gameHUD, Text: "Mostrar HUD do jogo", Checked: config.HUDMode == model.HUDGame, OnCheckedChanged: window.gameHUDChanged},
@@ -214,6 +216,7 @@ func (window *applicationWindow) create(config Config) error {
 				},
 			},
 			Composite{
+				MinSize: Size{Height: 36},
 				MaxSize: Size{Height: 36},
 				Layout:  HBox{Spacing: 8},
 				Children: []Widget{
