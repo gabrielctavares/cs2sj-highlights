@@ -147,10 +147,17 @@ func clipTableColumns() []TableViewColumn {
 }
 
 func highlightLegendText() string {
-	return "Tags: ACE elimina os cinco adversários no round. Clutch vence o round em desvantagem. " +
-		"4K e 3K indicam quatro ou três eliminações; HS, Smoke, No-scope, Flash assist e Wallbang descrevem o contexto técnico.\n" +
-		"Nota editorial: combina 70% da nota técnica com contexto como round vencido, entry, trade, clutch, match point, overtime e fim da partida. " +
-		"A coluna ‘Por que apareceu’ mostra os fatores aplicados em cada lance."
+	return "Tags: ACE elimina os cinco adversários no round. Clutch vence o round em desvantagem.\n" +
+		"4K e 3K indicam quatro ou três eliminações. Granada é multi-kill com granada.\n" +
+		"HS, Smoke, No-scope, Flash assist e Wallbang descrevem o contexto técnico.\n\n" +
+		"Nota geral: de 0 a 100 pontos. 70% vêm da nota técnica. O restante vem do contexto do round.\n\n" +
+		"Nota técnica: kills: 1K 20, 2K 38, 3K 62, 4K 80, 5K+ 95.\n" +
+		"Assistência +4, até 8. Flash assist +18, até 36. Headshot +8, até 16.\n" +
+		"Wallbang +15. No-scope +18. Smoke +18. Cego +12. Longa distância, sequência rápida e pouco HP: +10 cada.\n" +
+		"Clutch: 12 + 6 por adversário.\n\n" +
+		"Contexto: round vencido +10. Entry +8. Trade +5, até 10. Clutch: 15 + 5 por adversário.\n" +
+		"Match point +15. Overtime +10. Fim da partida +8. Multi-kill 3+ +10.\n\n" +
+		"A aba de detalhes mostra os pontos aplicados em cada lance."
 }
 
 func (window *applicationWindow) create(config Config) error {
