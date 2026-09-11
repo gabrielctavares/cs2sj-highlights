@@ -19,6 +19,7 @@ import (
 
 	"github.com/lxn/walk"
 	. "github.com/lxn/walk/declarative"
+	"github.com/lxn/win"
 )
 
 const vacWarning = "O CS2 será aberto com -insecure. Não entre em servidores protegidos por VAC durante a captura."
@@ -147,10 +148,7 @@ func clipTableColumns() []TableViewColumn {
 }
 
 func highlightLegendText() string {
-	return "Tags: ACE elimina os cinco adversários no round. Clutch vence o round em desvantagem.\n" +
-		"4K e 3K indicam quatro ou três eliminações. Granada é multi-kill com granada.\n" +
-		"HS, Smoke, No-scope, Flash assist e Wallbang descrevem o contexto técnico.\n\n" +
-		"Nota geral: de 0 a 100 pontos. 70% vêm da nota técnica. O restante vem do contexto do round.\n\n" +
+	return "Nota geral: de 0 a 100 pontos. 70% vêm da nota técnica. O restante vem do contexto do round.\n\n" +
 		"Nota técnica: kills: 1K 20, 2K 38, 3K 62, 4K 80, 5K+ 95.\n" +
 		"Assistência +4, até 8. Flash assist +18, até 36. Headshot +8, até 16.\n" +
 		"Wallbang +15. No-scope +18. Smoke +18. Cego +12. Longa distância, sequência rápida e pouco HP: +10 cada.\n" +
@@ -179,33 +177,43 @@ func (window *applicationWindow) create(config Config) error {
 	definition := MainWindow{
 		AssignTo: &window.mainWindow,
 		Title:    "CS2SJ Demo - Highlights",
-		MinSize:  Size{Width: 900, Height: 650},
-		Size:     Size{Width: 1100, Height: 780},
-		Layout:   VBox{Margins: Margins{Left: 14, Top: 14, Right: 14, Bottom: 14}, Spacing: 10},
+		MinSize:  Size{Width: 760, Height: 600},
+		Size:     Size{Width: 1000, Height: 720},
+		Layout:   VBox{Margins: Margins{Left: 12, Top: 10, Right: 12, Bottom: 10}, Spacing: 7},
+		OnSizeChanged: func() {
+			ensureMainWindowChrome(window.mainWindow)
+		},
 		Children: []Widget{
-			Label{Text: "Analise as demos, explore os melhores momentos gerais ou de um jogador e monte sua seleção final."},
 			Composite{
-				Layout: Grid{Columns: 3, Spacing: 8},
+				Layout: Grid{Columns: 3, Spacing: 6},
 				Children: []Widget{
 					Label{Text: "CS2 (cs2.exe)"},
 					LineEdit{AssignTo: &window.cs2Edit, Text: config.CS2Path, StretchFactor: 1},
 					PushButton{AssignTo: &window.cs2Browse, Text: "Procurar", OnClicked: window.browseCS2},
-					Label{Text: "Pasta das demos"},
-					LineEdit{AssignTo: &window.inputEdit, Text: config.InputDir, StretchFactor: 1, OnTextChanged: window.invalidatePreview},
-					PushButton{AssignTo: &window.inputBrowse, Text: "Procurar", OnClicked: func() { window.browseFolder(window.inputEdit, "Selecione a pasta das demos") }},
-					Label{Text: "Pasta de saída"},
-					LineEdit{AssignTo: &window.outputEdit, Text: config.OutputDir, StretchFactor: 1, OnTextChanged: func() { window.invalidatePreview(); window.updateOpenOutput() }},
-					PushButton{AssignTo: &window.outputBrowse, Text: "Procurar", OnClicked: func() { window.browseFolder(window.outputEdit, "Selecione a pasta de saída") }},
 				},
 			},
 			Composite{
-				Layout: Grid{Columns: 4, Spacing: 8},
+				Layout: HBox{Spacing: 8},
+				Children: []Widget{
+					Composite{StretchFactor: 1, Layout: Grid{Columns: 3, Spacing: 6}, Children: []Widget{
+						Label{Text: "Pasta das demos"},
+						LineEdit{AssignTo: &window.inputEdit, Text: config.InputDir, StretchFactor: 1, OnTextChanged: window.invalidatePreview},
+						PushButton{AssignTo: &window.inputBrowse, Text: "Procurar", OnClicked: func() { window.browseFolder(window.inputEdit, "Selecione a pasta das demos") }},
+					}},
+					Composite{StretchFactor: 1, Layout: Grid{Columns: 3, Spacing: 6}, Children: []Widget{
+						Label{Text: "Pasta de saída"},
+						LineEdit{AssignTo: &window.outputEdit, Text: config.OutputDir, StretchFactor: 1, OnTextChanged: func() { window.invalidatePreview(); window.updateOpenOutput() }},
+						PushButton{AssignTo: &window.outputBrowse, Text: "Procurar", OnClicked: func() { window.browseFolder(window.outputEdit, "Selecione a pasta de saída") }},
+					}},
+				},
+			},
+			Composite{
+				Layout: HBox{Spacing: 6},
 				Children: []Widget{
 					Label{Text: "HUD do vídeo:"},
 					CheckBox{AssignTo: &window.gameHUD, Text: "Mostrar HUD do jogo", Checked: config.HUDMode == model.HUDGame, OnCheckedChanged: window.gameHUDChanged},
 					CheckBox{AssignTo: &window.customHUD, Text: "Usar HUD personalizada", Checked: config.HUDMode == model.HUDCustom, OnCheckedChanged: window.customHUDChanged},
-					HSpacer{},
-					Label{Text: "Tema externo (hud.json)"},
+					Label{Text: "Tema:"},
 					LineEdit{AssignTo: &window.hudThemeEdit, Text: config.HUDThemePath, StretchFactor: 1},
 					PushButton{AssignTo: &window.hudThemeBrowse, Text: "Selecionar", OnClicked: window.browseHUDTheme},
 					PushButton{AssignTo: &window.hudEditor, Text: "Editor visual", OnClicked: window.openHUDThemeEditor},
@@ -228,17 +236,17 @@ func (window *applicationWindow) create(config Config) error {
 				Pages: []TabPage{
 					{Title: "Melhores da partida", Layout: VBox{Spacing: 8}, Children: []Widget{
 						Label{Text: "Visão da organização: lances de maior valor para a narrativa da partida."},
-						TableView{AssignTo: &window.editorialTable, Model: window.editorialModel, AlternatingRowBG: true, ColumnsSizable: true, MinSize: Size{Width: 850, Height: 250}, StretchFactor: 1, Columns: clipTableColumns(), OnCurrentIndexChanged: window.updateSelectionStatus},
+						TableView{AssignTo: &window.editorialTable, Model: window.editorialModel, AlternatingRowBG: true, ColumnsSizable: true, MinSize: Size{Width: 700, Height: 220}, StretchFactor: 1, Columns: clipTableColumns(), OnCurrentIndexChanged: window.updateSelectionStatus},
 						Composite{Layout: HBox{Spacing: 8}, Children: []Widget{PushButton{AssignTo: &window.addEditorial, Text: "Adicionar à seleção", Enabled: false, OnClicked: window.addEditorialChoice}, HSpacer{}}},
 					}},
 					{Title: "Por jogador", Layout: VBox{Spacing: 8}, Children: []Widget{
 						Composite{Layout: HBox{Spacing: 8}, Children: []Widget{Label{Text: "Jogador:"}, ComboBox{AssignTo: &window.playerCombo, Enabled: false, OnCurrentIndexChanged: window.playerChanged}, HSpacer{}}},
-						TableView{AssignTo: &window.playerTable, Model: window.playerModel, AlternatingRowBG: true, ColumnsSizable: true, MinSize: Size{Width: 850, Height: 250}, StretchFactor: 1, Columns: clipTableColumns(), OnCurrentIndexChanged: window.updateSelectionStatus},
+						TableView{AssignTo: &window.playerTable, Model: window.playerModel, AlternatingRowBG: true, ColumnsSizable: true, MinSize: Size{Width: 700, Height: 220}, StretchFactor: 1, Columns: clipTableColumns(), OnCurrentIndexChanged: window.updateSelectionStatus},
 						Composite{Layout: HBox{Spacing: 8}, Children: []Widget{PushButton{AssignTo: &window.addPlayer, Text: "Adicionar à seleção", Enabled: false, OnClicked: window.addPlayerChoice}, HSpacer{}}},
 					}},
 					{Title: "Seleção final", Layout: VBox{Spacing: 8}, Children: []Widget{
 						Label{Text: "Somente estes clipes serão processados. Itens repetidos entre as duas visões aparecem uma vez."},
-						TableView{AssignTo: &window.finalTable, Model: window.finalModel, AlternatingRowBG: true, ColumnsSizable: true, MinSize: Size{Width: 850, Height: 250}, StretchFactor: 1, Columns: clipTableColumns(), OnCurrentIndexChanged: window.updateSelectionStatus},
+						TableView{AssignTo: &window.finalTable, Model: window.finalModel, AlternatingRowBG: true, ColumnsSizable: true, MinSize: Size{Width: 700, Height: 220}, StretchFactor: 1, Columns: clipTableColumns(), OnCurrentIndexChanged: window.updateSelectionStatus},
 						Composite{Layout: HBox{Spacing: 8}, Children: []Widget{PushButton{AssignTo: &window.removeFinal, Text: "Remover da seleção", Enabled: false, OnClicked: window.removeFinalChoice}, HSpacer{}}},
 					}},
 				},
@@ -254,12 +262,13 @@ func (window *applicationWindow) create(config Config) error {
 				},
 			},
 			Label{Text: "Status"},
-			TextEdit{AssignTo: &window.statusEdit, ReadOnly: true, VScroll: true, MinSize: Size{Width: 850, Height: 120}},
+			TextEdit{AssignTo: &window.statusEdit, ReadOnly: true, VScroll: true, MinSize: Size{Width: 700, Height: 100}},
 		},
 	}
 	if err := definition.Create(); err != nil {
 		return fmt.Errorf("criar janela principal: %w", err)
 	}
+	ensureMainWindowChrome(window.mainWindow)
 	if icon, iconErr := loadApplicationIcon(window.executablePath, walk.NewIconExtractedFromFileWithSize); iconErr == nil && icon != nil {
 		if setErr := window.mainWindow.SetIcon(icon); setErr == nil {
 			window.applicationIcon = icon
@@ -271,6 +280,19 @@ func (window *applicationWindow) create(config Config) error {
 	window.updateSelectionStatus()
 	window.updateOpenOutput()
 	return nil
+}
+
+func ensureMainWindowChrome(mainWindow *walk.MainWindow) {
+	if mainWindow == nil || mainWindow.IsDisposed() {
+		return
+	}
+	wanted := int32(win.WS_CAPTION | win.WS_SYSMENU | win.WS_MINIMIZEBOX | win.WS_MAXIMIZEBOX | win.WS_THICKFRAME)
+	style := win.GetWindowLong(mainWindow.Handle(), win.GWL_STYLE)
+	if style&wanted == wanted {
+		return
+	}
+	win.SetWindowLong(mainWindow.Handle(), win.GWL_STYLE, style|wanted)
+	win.SetWindowPos(mainWindow.Handle(), 0, 0, 0, 0, 0, win.SWP_FRAMECHANGED|win.SWP_NOMOVE|win.SWP_NOOWNERZORDER|win.SWP_NOSIZE|win.SWP_NOZORDER)
 }
 
 func (window *applicationWindow) browseCS2() {

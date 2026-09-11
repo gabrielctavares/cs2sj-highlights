@@ -9,6 +9,9 @@ import (
 
 func TestHighlightLegendExplainsScoringValues(t *testing.T) {
 	legend := highlightLegendText()
+	if strings.Contains(legend, "Tags:") || strings.Contains(legend, "ACE elimina") {
+		t.Fatalf("legend should focus on scoring, not tag definitions: %q", legend)
+	}
 	for _, want := range []string{
 		"1K 20, 2K 38, 3K 62, 4K 80, 5K+ 95",
 		"Flash assist +18, até 36",
