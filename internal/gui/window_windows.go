@@ -185,8 +185,8 @@ func (window *applicationWindow) create(config Config) error {
 		},
 		Children: []Widget{
 			Composite{
-				MinSize: Size{Height: 54},
-				MaxSize: Size{Height: 54},
+				MinSize: Size{Height: 60},
+				MaxSize: Size{Height: 60},
 				Layout:  Grid{Columns: 6, Spacing: 2},
 				Children: []Widget{
 					Label{Text: "CS2 (cs2.exe)"},
@@ -201,8 +201,8 @@ func (window *applicationWindow) create(config Config) error {
 				},
 			},
 			Composite{
-				MinSize: Size{Height: 54},
-				MaxSize: Size{Height: 54},
+				MinSize: Size{Height: 60},
+				MaxSize: Size{Height: 60},
 				Layout:  Grid{Columns: 4, Spacing: 2},
 				Children: []Widget{
 					Label{Text: "HUD do vídeo:"},
