@@ -185,32 +185,22 @@ func (window *applicationWindow) create(config Config) error {
 		},
 		Children: []Widget{
 			Composite{
-				MaxSize: Size{Height: 28},
-				Layout:  Grid{Columns: 3, Spacing: 6},
+				MaxSize: Size{Height: 62},
+				Layout:  Grid{Columns: 6, Spacing: 6},
 				Children: []Widget{
 					Label{Text: "CS2 (cs2.exe)"},
-					LineEdit{AssignTo: &window.cs2Edit, Text: config.CS2Path, StretchFactor: 1},
+					LineEdit{AssignTo: &window.cs2Edit, Text: config.CS2Path, StretchFactor: 1, ColumnSpan: 4},
 					PushButton{AssignTo: &window.cs2Browse, Text: "Procurar", OnClicked: window.browseCS2},
+					Label{Text: "Pasta das demos"},
+					LineEdit{AssignTo: &window.inputEdit, Text: config.InputDir, StretchFactor: 1, OnTextChanged: window.invalidatePreview},
+					PushButton{AssignTo: &window.inputBrowse, Text: "Procurar", OnClicked: func() { window.browseFolder(window.inputEdit, "Selecione a pasta das demos") }},
+					Label{Text: "Pasta de saída"},
+					LineEdit{AssignTo: &window.outputEdit, Text: config.OutputDir, StretchFactor: 1, OnTextChanged: func() { window.invalidatePreview(); window.updateOpenOutput() }},
+					PushButton{AssignTo: &window.outputBrowse, Text: "Procurar", OnClicked: func() { window.browseFolder(window.outputEdit, "Selecione a pasta de saída") }},
 				},
 			},
 			Composite{
-				MaxSize: Size{Height: 28},
-				Layout:  HBox{Spacing: 8},
-				Children: []Widget{
-					Composite{StretchFactor: 1, Layout: Grid{Columns: 3, Spacing: 6}, Children: []Widget{
-						Label{Text: "Pasta das demos"},
-						LineEdit{AssignTo: &window.inputEdit, Text: config.InputDir, StretchFactor: 1, OnTextChanged: window.invalidatePreview},
-						PushButton{AssignTo: &window.inputBrowse, Text: "Procurar", OnClicked: func() { window.browseFolder(window.inputEdit, "Selecione a pasta das demos") }},
-					}},
-					Composite{StretchFactor: 1, Layout: Grid{Columns: 3, Spacing: 6}, Children: []Widget{
-						Label{Text: "Pasta de saída"},
-						LineEdit{AssignTo: &window.outputEdit, Text: config.OutputDir, StretchFactor: 1, OnTextChanged: func() { window.invalidatePreview(); window.updateOpenOutput() }},
-						PushButton{AssignTo: &window.outputBrowse, Text: "Procurar", OnClicked: func() { window.browseFolder(window.outputEdit, "Selecione a pasta de saída") }},
-					}},
-				},
-			},
-			Composite{
-				MaxSize: Size{Height: 56},
+				MaxSize: Size{Height: 62},
 				Layout:  Grid{Columns: 4, Spacing: 6},
 				Children: []Widget{
 					Label{Text: "HUD do vídeo:"},
