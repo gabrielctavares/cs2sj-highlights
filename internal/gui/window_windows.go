@@ -179,13 +179,14 @@ func (window *applicationWindow) create(config Config) error {
 		Title:    "CS2SJ Demo - Highlights",
 		MinSize:  Size{Width: 760, Height: 600},
 		Size:     Size{Width: 1000, Height: 720},
-		Layout:   VBox{Margins: Margins{Left: 12, Top: 10, Right: 12, Bottom: 10}, Spacing: 7},
+		Layout:   VBox{Margins: Margins{Left: 12, Top: 8, Right: 12, Bottom: 10}, Spacing: 4},
 		OnSizeChanged: func() {
 			ensureMainWindowChrome(window.mainWindow)
 		},
 		Children: []Widget{
 			Composite{
-				Layout: Grid{Columns: 3, Spacing: 6},
+				MaxSize: Size{Height: 28},
+				Layout:  Grid{Columns: 3, Spacing: 6},
 				Children: []Widget{
 					Label{Text: "CS2 (cs2.exe)"},
 					LineEdit{AssignTo: &window.cs2Edit, Text: config.CS2Path, StretchFactor: 1},
@@ -193,7 +194,8 @@ func (window *applicationWindow) create(config Config) error {
 				},
 			},
 			Composite{
-				Layout: HBox{Spacing: 8},
+				MaxSize: Size{Height: 28},
+				Layout:  HBox{Spacing: 8},
 				Children: []Widget{
 					Composite{StretchFactor: 1, Layout: Grid{Columns: 3, Spacing: 6}, Children: []Widget{
 						Label{Text: "Pasta das demos"},
@@ -208,19 +210,22 @@ func (window *applicationWindow) create(config Config) error {
 				},
 			},
 			Composite{
-				Layout: HBox{Spacing: 6},
+				MaxSize: Size{Height: 56},
+				Layout:  Grid{Columns: 4, Spacing: 6},
 				Children: []Widget{
 					Label{Text: "HUD do vídeo:"},
 					CheckBox{AssignTo: &window.gameHUD, Text: "Mostrar HUD do jogo", Checked: config.HUDMode == model.HUDGame, OnCheckedChanged: window.gameHUDChanged},
 					CheckBox{AssignTo: &window.customHUD, Text: "Usar HUD personalizada", Checked: config.HUDMode == model.HUDCustom, OnCheckedChanged: window.customHUDChanged},
-					Label{Text: "Tema:"},
+					HSpacer{},
+					Label{Text: "Tema externo (hud.json)"},
 					LineEdit{AssignTo: &window.hudThemeEdit, Text: config.HUDThemePath, StretchFactor: 1},
 					PushButton{AssignTo: &window.hudThemeBrowse, Text: "Selecionar", OnClicked: window.browseHUDTheme},
 					PushButton{AssignTo: &window.hudEditor, Text: "Editor visual", OnClicked: window.openHUDThemeEditor},
 				},
 			},
 			Composite{
-				Layout: HBox{Spacing: 8},
+				MaxSize: Size{Height: 36},
+				Layout:  HBox{Spacing: 8},
 				Children: []Widget{
 					PushButton{AssignTo: &window.analyze, Text: "Analisar demos", MinSize: Size{Width: 140, Height: 34}, OnClicked: window.startAnalysis},
 					Label{Text: "Nome do campeonato:"},
