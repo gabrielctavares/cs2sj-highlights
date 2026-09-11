@@ -7,6 +7,6 @@ const (
 	CandidateVersion      = "candidates-v1"
 	ScoringVersion        = "scores-v1"
 	DiversityVersion      = "diversity-v1"
-	MasterVersion         = "capture-v5-crosshair"
-	OutputVersion         = "full-clip-v2-audio-sync"
+	MasterVersion         = "capture-v6-account-id"
+	OutputVersion         = "full-clip-v5-tail-trim"
 )

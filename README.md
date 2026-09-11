@@ -75,7 +75,11 @@ Os modos sem HUD e HUD personalizada compartilham masters `clean`; a HUD nativa 
 
 ## Ritmo dos clipes
 
-O ritmo inteligente está temporariamente desabilitado. Cada vídeo final preserva o master completo em 1×, sem cortes, saltos ou aceleração, para mostrar o lance inteiro. Os metadados de ação continuam salvos para uma futura reativação desse recurso.
+O ritmo inteligente é aplicado depois que vídeo e áudio já foram reunidos no mesmo master. A edição mantém 3 segundos antes e 2 segundos depois de cada evento em 1×; lacunas ociosas maiores que 6 segundos entre eventos são reproduzidas integralmente em 2×. O vídeo termina após os 2 segundos de desfecho do último evento, sem preservar uma cauda que sugira outra jogada. Vídeo e áudio passam juntos pela mesma transformação de tempo.
+
+Quando o HLAE entrega vídeo e WAV separados, a pós-produção cria primeiro um `*-av.mkv` junto à captura: vídeo copiado sem recompressão e áudio FLAC a 48 kHz. A HUD e o MP4 final usam esse arquivo único. Os originais são preservados e o master unificado é reconstruído em cada nova tentativa. A compensação de início do WAV da versão anterior foi mantida por compatibilidade; durações iguais não comprovam sincronização perceptiva.
+
+Limitação conhecida, reproduzida com marcadores sintéticos: se um WAV tiver 500 ms extras no **fim**, a compensação herdada interpreta essa diferença como sobra no início e adianta o áudio em 500 ms, tanto no MKV quanto no MP4. O teste `TestUnifiedMasterTimingFFmpegIntegration` documenta esse comportamento, não uma aprovação de sincronismo nesse cenário. A validação com uma captura HLAE real ainda é necessária.
 
 ## Compilar
 

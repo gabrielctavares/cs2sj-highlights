@@ -92,7 +92,7 @@ func BuildCFG(demoPath string, pass RenderPass, tickRate float64, hudMode model.
 			return "", fmt.Errorf("clip %q has invalid recording path: %w", clip.ID, err)
 		}
 		cameraTick := max(1, clip.StartTick-int(5*tickRate), lastStop+1)
-		fmt.Fprintf(&builder, "mirv_cmd addAtTick %d \"demo_timescale 1; spec_lock_to_accountid %d; spec_mode 1\"\n", cameraTick, clip.Player.SteamID)
+		fmt.Fprintf(&builder, "mirv_cmd addAtTick %d \"demo_timescale 1; spec_lock_to_accountid %d; spec_mode 1\"\n", cameraTick, steamAccountID(clip.Player.SteamID))
 		cfgName := filepath.ToSlash(filepath.Join("cs2-highlights", clipStartCFGFileName(pass.Index, clip.ID)))
 		fmt.Fprintf(&builder, "mirv_cmd addAtTick %d \"exec %s\"\n", clip.StartTick, cfgName)
 		if index+1 < len(clips) {
@@ -126,7 +126,12 @@ func BuildClipCFG(clip model.Highlight) (string, error) {
 	if err := validateConsolePath(recordingPath); err != nil {
 		return "", fmt.Errorf("clip %q has invalid recording path: %w", clip.ID, err)
 	}
-	return fmt.Sprintf("demo_timescale 1\nspec_lock_to_accountid 0\nspec_mode 1\nspec_player \"%s\"\nspec_lock_to_accountid %d\nmirv_streams record name \"%s\"\nmirv_streams record start\n", clip.Player.Name, clip.Player.SteamID, recordingPath), nil
+	return fmt.Sprintf("demo_timescale 1\nspec_lock_to_accountid 0\nspec_mode 1\nspec_player \"%s\"\nspec_lock_to_accountid %d\nmirv_streams record name \"%s\"\nmirv_streams record start\n", clip.Player.Name, steamAccountID(clip.Player.SteamID), recordingPath), nil
+}
+
+// CS2 expects the 32-bit account number here, not the SteamID64 stored in demos.
+func steamAccountID(steamID uint64) uint32 {
+	return uint32(steamID)
 }
 
 func clipStartCFGFileName(passIndex int, clipID string) string {

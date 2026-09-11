@@ -12,16 +12,21 @@ func TestPlanPacingKeepsNearbyKillsAtNormalSpeed(t *testing.T) {
 	}
 }
 
-func TestPlanPacingCutsMiddleOfLongInactiveGap(t *testing.T) {
+func TestPlanPacingAcceleratesCompleteLongInactiveGap(t *testing.T) {
 	got := PlanPacing(35, []float64{5, 25})
 	want := []PacingSegment{
 		{Start: 0, End: 7, Speed: 1},
-		{Start: 7, End: 9, Speed: 2},
-		{Start: 20, End: 22, Speed: 2},
+		{Start: 7, End: 22, Speed: 2},
 		{Start: 22, End: 27, Speed: 1},
-		{Start: 27, End: 35, Speed: 2},
 	}
 	if !reflect.DeepEqual(got, want) {
+		t.Fatalf("segments = %#v, want %#v", got, want)
+	}
+}
+
+func TestPlanPacingEndsTwoSecondsAfterLastAction(t *testing.T) {
+	want := []PacingSegment{{Start: 0, End: 10, Speed: 1}}
+	if got := PlanPacing(15, []float64{8}); !reflect.DeepEqual(got, want) {
 		t.Fatalf("segments = %#v, want %#v", got, want)
 	}
 }

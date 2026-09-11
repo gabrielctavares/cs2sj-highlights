@@ -11,8 +11,8 @@ type PacingSegment struct {
 	Speed float64
 }
 
-// PlanPacing preserves action clusters, speeds up moderate quiet gaps and removes
-// only the middle of long gaps. Offsets are seconds from the captured master.
+// PlanPacing preserves action clusters and speeds up complete quiet gaps without
+// removing any part of the captured master. Offsets are seconds from the master.
 func PlanPacing(duration float64, actionOffsets []float64) []PacingSegment {
 	if duration <= 0 {
 		return nil
@@ -51,7 +51,9 @@ func PlanPacing(duration float64, actionOffsets []float64) []PacingSegment {
 		segments = appendPacingSegment(segments, current.start, current.end, 1)
 		cursor = current.end
 	}
-	return appendQuietGap(segments, cursor, duration)
+	// The final action block already includes two seconds of aftermath. Dropping
+	// the remaining capture tail avoids implying that another play is coming.
+	return segments
 }
 
 func normalizedActions(duration float64, offsets []float64) []float64 {
@@ -74,11 +76,7 @@ func appendQuietGap(segments []PacingSegment, start, end float64) []PacingSegmen
 	if duration <= 6 {
 		return appendPacingSegment(segments, start, end, 1)
 	}
-	if duration <= 12 {
-		return appendPacingSegment(segments, start, end, 2)
-	}
-	segments = appendPacingSegment(segments, start, start+2, 2)
-	return appendPacingSegment(segments, end-2, end, 2)
+	return appendPacingSegment(segments, start, end, 2)
 }
 
 func appendPacingSegment(segments []PacingSegment, start, end, speed float64) []PacingSegment {

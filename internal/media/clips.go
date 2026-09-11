@@ -121,6 +121,33 @@ func (builder ClipBuilder) Build(ctx context.Context, highlight model.Highlight)
 		}
 	}
 	customHUD := builder.HUDMode == model.HUDCustom
+	if highlight.MasterAudioPath != "" {
+		master, normalizeErr := builder.normalizeMaster(ctx, highlight)
+		if normalizeErr != nil {
+			return model.OutputPaths{}, normalizeErr
+		}
+		highlight.MasterPath = master
+		highlight.MasterAudioPath = ""
+	}
+	videoSource := "[0:v]"
+	audioMap := "0:a:0"
+	filterPrefix := ""
+	if len(highlight.ActionOffsets) > 0 {
+		masterProbe, probeErr := builder.Probe(ctx, highlight.MasterPath)
+		if probeErr != nil {
+			return model.OutputPaths{}, fmt.Errorf("probe master for pacing %q: %w", highlight.ID, probeErr)
+		}
+		segments := PlanPacing(masterProbe.Duration, highlight.ActionOffsets)
+		plannedDuration, accelerated, cuts := pacingStats(masterProbe.Duration, segments)
+		if accelerated > 0 || cuts > 0 {
+			filterPrefix = pacingFilter(segments, "0:a")
+			videoSource = "[paced]"
+			audioMap = "[a]"
+			if builder.Logger != nil {
+				builder.Logger.Info("ritmo inteligente aplicado", "highlight", highlight.ID, "duracao_original", masterProbe.Duration, "duracao_planejada", plannedDuration, "trechos_acelerados", accelerated, "cortes_de_cauda", cuts)
+			}
+		}
+	}
 	useLogo := customHUD && builder.Theme == nil && strings.TrimSpace(builder.LogoPath) != ""
 	if useLogo {
 		info, statErr := os.Stat(builder.LogoPath)
@@ -132,13 +159,8 @@ func (builder ClipBuilder) Build(ctx context.Context, highlight model.Highlight)
 	if err := os.MkdirAll(directory, 0o755); err != nil {
 		return model.OutputPaths{}, fmt.Errorf("create clip output directory %q: %w", directory, err)
 	}
-	videoSource := "[0:v]"
-	audioMap := "0:a:0"
-	// Ritmo inteligente temporariamente desabilitado. ActionOffsets continua no
-	// manifesto para uma futura reativacao, mas o MP4 preserva o master completo
-	// em velocidade normal, sem cortes ou saltos no lance.
 	filterPath := filepath.Join(filepath.Dir(highlight.Outputs.Horizontal), highlight.ID+"-horizontal.ffscript")
-	filter := videoSource + "scale=1920:1080:force_original_aspect_ratio=decrease,pad=1920:1080:(ow-iw)/2:(oh-ih)/2[v]"
+	filter := filterPrefix + videoSource + "scale=1920:1080:force_original_aspect_ratio=decrease,pad=1920:1080:(ow-iw)/2:(oh-ih)/2[v]"
 	textPaths := map[string]string{}
 	if customHUD {
 		labels := tournamentHUDText(highlight)
@@ -159,7 +181,7 @@ func (builder ClipBuilder) Build(ctx context.Context, highlight model.Highlight)
 				return model.OutputPaths{}, fmt.Errorf("write HUD text file %q: %w", path, err)
 			}
 		}
-		filter = fmt.Sprintf(
+		filter = filterPrefix + fmt.Sprintf(
 			videoSource+"scale=1920:1080:force_original_aspect_ratio=decrease,pad=1920:1080:(ow-iw)/2:(oh-ih)/2,"+
 				"drawbox=x=430:y=12:w=1060:h=30:color=0x0d1219@0.94:t=fill,"+
 				"drawbox=x=350:y=42:w=1220:h=78:color=0x111923@0.94:t=fill,"+
@@ -189,9 +211,6 @@ func (builder ClipBuilder) Build(ctx context.Context, highlight model.Highlight)
 		)
 		if useLogo {
 			logoInput := 1
-			if highlight.MasterAudioPath != "" {
-				logoInput = 2
-			}
 			filter += fmt.Sprintf(";[%d:v]scale=60:60[logo];[hud][logo]overlay=x=805:y=51:format=auto[v]", logoInput)
 		} else {
 			filter += ";[hud]null[v]"
@@ -206,7 +225,7 @@ func (builder ClipBuilder) Build(ctx context.Context, highlight model.Highlight)
 		if themeErr != nil {
 			return model.OutputPaths{}, fmt.Errorf("build HUD theme %q: %w", builder.Theme.Name, themeErr)
 		}
-		filter = plan.Filter
+		filter = filterPrefix + strings.Replace(plan.Filter, "[0:v]", videoSource, 1)
 		themeInputs = plan.Inputs
 	}
 	if err := os.WriteFile(filterPath, []byte(filter), 0o600); err != nil {
@@ -231,22 +250,6 @@ func (builder ClipBuilder) Build(ctx context.Context, highlight model.Highlight)
 	for _, input := range themeInputs {
 		horizontalArgs = append(horizontalArgs, "-i", input)
 	}
-	if highlight.MasterAudioPath != "" {
-		videoProbe, probeErr := builder.Probe(ctx, highlight.MasterPath)
-		if probeErr != nil {
-			return model.OutputPaths{}, fmt.Errorf("probe master video for audio sync %q: %w", highlight.ID, probeErr)
-		}
-		audioProbe, probeErr := builder.Probe(ctx, highlight.MasterAudioPath)
-		if probeErr != nil {
-			return model.OutputPaths{}, fmt.Errorf("probe master audio for sync %q: %w", highlight.ID, probeErr)
-		}
-		audioStartTrim := audioProbe.Duration - videoProbe.Duration
-		if audioStartTrim > 0.02 {
-			horizontalArgs = append(horizontalArgs, "-ss", fmt.Sprintf("%.6f", audioStartTrim))
-		}
-		horizontalArgs = append(horizontalArgs, "-i", highlight.MasterAudioPath)
-		audioMap = fmt.Sprintf("%d:a:0", 1+len(themeInputs))
-	}
 	if useLogo {
 		horizontalArgs = append(horizontalArgs, "-i", builder.LogoPath)
 	}
@@ -254,9 +257,6 @@ func (builder ClipBuilder) Build(ctx context.Context, highlight model.Highlight)
 		"-/filter_complex", filterPath,
 		"-map", "[v]", "-map", audioMap,
 	)
-	if highlight.MasterAudioPath != "" {
-		horizontalArgs = append(horizontalArgs, "-shortest")
-	}
 	horizontalArgs = append(horizontalArgs, encodeArgs()...)
 	horizontalArgs = append(horizontalArgs, horizontalPartial)
 	if _, err := builder.Run(ctx, builder.FFmpegPath, horizontalArgs...); err != nil {

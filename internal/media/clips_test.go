@@ -3,6 +3,7 @@ package media
 import (
 	"context"
 	"errors"
+	"math"
 	"os"
 	"os/exec"
 	"path/filepath"
@@ -183,11 +184,13 @@ func TestClipBuilderUsesSelectedExternalTheme(t *testing.T) {
 func TestClipBuilderMapsSeparateAudio(t *testing.T) {
 	highlight := clipFixture(t, true)
 	var first []string
+	var final []string
 	builder := ClipBuilder{FFmpegPath: "ffmpeg", FontPath: `C:\font.ttf`,
 		Run: func(_ context.Context, _ string, args ...string) ([]byte, error) {
 			if first == nil {
 				first = slices.Clone(args)
 			}
+			final = slices.Clone(args)
 			return nil, os.WriteFile(args[len(args)-1], []byte("mp4"), 0o600)
 		},
 		Probe: func(_ context.Context, path string) (ProbeResult, error) {
@@ -196,6 +199,9 @@ func TestClipBuilderMapsSeparateAudio(t *testing.T) {
 			}
 			if path == highlight.MasterAudioPath {
 				return ProbeResult{Duration: 26.726168, AudioCodec: "pcm_s16le", HasAudio: true}, nil
+			}
+			if strings.HasSuffix(path, ".mkv") {
+				return ProbeResult{Duration: 25.766667, Width: 1920, Height: 1080, VideoCodec: "h264", AudioCodec: "flac", HasAudio: true}, nil
 			}
 			return ProbeResult{Duration: 2, Width: 1920, Height: 1080, VideoCodec: "h264", AudioCodec: "aac", HasAudio: true}, nil
 		},
@@ -210,6 +216,9 @@ func TestClipBuilderMapsSeparateAudio(t *testing.T) {
 	wantSyncInput := "-ss 0.959501 -i " + highlight.MasterAudioPath
 	if !strings.Contains(joined, wantSyncInput) {
 		t.Fatalf("audio startup latency was not corrected with %q: %#v", wantSyncInput, first)
+	}
+	if !strings.Contains(strings.Join(final, " "), "-map 0:a:0") || slices.Contains(final, highlight.MasterAudioPath) || !slices.Contains(final, strings.TrimSuffix(highlight.MasterPath, ".mp4")+"-av.mkv") {
+		t.Fatalf("final encode did not consume unified master: %v", final)
 	}
 }
 
@@ -251,7 +260,7 @@ func TestClipBuilderNoneModeHasNoTournamentHUD(t *testing.T) {
 	}
 }
 
-func TestClipBuilderKeepsFullMasterWhenActionMetadataExists(t *testing.T) {
+func TestClipBuilderAcceleratesVideoAndAudioTogether(t *testing.T) {
 	highlight := clipFixture(t, false)
 	highlight.ActionOffsets = []float64{5, 25}
 	var filter string
@@ -270,19 +279,19 @@ func TestClipBuilderKeepsFullMasterWhenActionMetadataExists(t *testing.T) {
 			if path == highlight.MasterPath {
 				return ProbeResult{Duration: 35, Width: 1920, Height: 1080, VideoCodec: "h264", AudioCodec: "aac", HasAudio: true}, nil
 			}
-			return ProbeResult{Duration: 20, Width: 1920, Height: 1080, VideoCodec: "h264", AudioCodec: "aac", HasAudio: true}, nil
+			return ProbeResult{Duration: 27.5, Width: 1920, Height: 1080, VideoCodec: "h264", AudioCodec: "aac", HasAudio: true}, nil
 		}}
 	if _, err := builder.Build(context.Background(), highlight); err != nil {
 		t.Fatal(err)
 	}
-	for _, value := range []string{"trim=", "atempo=", "concat=", "[paced]"} {
-		if strings.Contains(filter, value) {
-			t.Errorf("full clip unexpectedly contains pacing filter %q: %s", value, filter)
+	for _, value := range []string{"[0:v]trim=start=7.000:end=22.000", "setpts=(PTS-STARTPTS)/2.000", "[0:a]atrim=start=7.000:end=22.000", "atempo=2.000", "concat=n=3:v=1:a=1[paced][a]", "[paced]scale=1920:1080"} {
+		if !strings.Contains(filter, value) {
+			t.Errorf("paced clip is missing %q: %s", value, filter)
 		}
 	}
 	joined := strings.Join(args, " ")
-	if !strings.Contains(joined, "-map 0:a:0") {
-		t.Fatalf("original audio was not mapped directly: %#v", args)
+	if !strings.Contains(joined, "-map [a]") {
+		t.Fatalf("paced audio output was not mapped: %#v", args)
 	}
 }
 
@@ -322,8 +331,8 @@ func TestClipBuilderRealFFmpeg(t *testing.T) {
 		t.Skip("Segoe UI Bold font unavailable")
 	}
 	highlight := clipFixture(t, false)
-	highlight.ActionOffsets = []float64{0.5, 1.5}
-	command := exec.Command(ffmpeg, "-y", "-f", "lavfi", "-i", "color=c=blue:s=1920x1080:d=2:r=60", "-f", "lavfi", "-i", "sine=frequency=1000:duration=2", "-c:v", "libx264", "-pix_fmt", "yuv420p", "-c:a", "aac", "-shortest", highlight.MasterPath)
+	highlight.ActionOffsets = []float64{1, 13}
+	command := exec.Command(ffmpeg, "-y", "-f", "lavfi", "-i", "color=c=blue:s=320x180:d=14:r=30", "-f", "lavfi", "-i", "sine=frequency=1000:duration=14", "-c:v", "libx264", "-pix_fmt", "yuv420p", "-c:a", "aac", "-shortest", highlight.MasterPath)
 	if output, err := command.CombinedOutput(); err != nil {
 		t.Fatalf("generate fixture: %v: %s", err, output)
 	}
@@ -339,6 +348,9 @@ func TestClipBuilderRealFFmpeg(t *testing.T) {
 	}
 	if err := ValidateFinal(probe, 1920, 1080); err != nil {
 		t.Fatal(err)
+	}
+	if math.Abs(probe.Duration-10.5) > 0.15 {
+		t.Fatalf("paced duration = %.3fs, want approximately 10.5s", probe.Duration)
 	}
 	if outputs.Vertical != "" {
 		t.Fatalf("vertical output must remain disabled: %#v", outputs)

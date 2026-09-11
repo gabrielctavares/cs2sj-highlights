@@ -27,7 +27,7 @@ func TestBuildCFG(t *testing.T) {
 		"demo_ui_mode 0",
 		"cl_showdemooverlay 0",
 		`mirv_cmd addAtTick 1 "cl_drawhud 1; cl_draw_only_deathnotices 1; cl_drawhud_force_deathnotices 1; cl_drawhud_force_radar -1; cl_drawhud_force_teamid_overhead -1; cl_trueview_show_status 0; demo_gototick 560; demo_timescale 10"`,
-		`mirv_cmd addAtTick 880 "demo_timescale 1; spec_lock_to_accountid 76561198000000007; spec_mode 1"`,
+		`mirv_cmd addAtTick 880 "demo_timescale 1; spec_lock_to_accountid 39734279; spec_mode 1"`,
 		`mirv_cmd addAtTick 1200 "exec cs2-highlights/pass-01-r03-p7-t1200-start.cfg"`,
 		`mirv_cmd addAtTick 1800 "mirv_streams record end; demo_timescale 10"`,
 		`mirv_cmd addAtTick 1928 "quit"`,
@@ -51,7 +51,7 @@ func TestBuildCFGSlowsDownBeforeRecordingStarts(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	want := `mirv_cmd addAtTick 880 "demo_timescale 1; spec_lock_to_accountid 76561198000000001; spec_mode 1"`
+	want := `mirv_cmd addAtTick 880 "demo_timescale 1; spec_lock_to_accountid 39734273; spec_mode 1"`
 	if !strings.Contains(got, want) {
 		t.Fatalf("capture must stabilize at 1x five seconds before recording; missing %q in:\n%s", want, got)
 	}
@@ -118,7 +118,7 @@ func TestBuildClipCFGQuotesRecordingPath(t *testing.T) {
 	for _, line := range []string{
 		"demo_timescale 1",
 		`spec_player "gabi"`,
-		"spec_lock_to_accountid 76561198000000007",
+		"spec_lock_to_accountid 39734279",
 		"spec_mode 1",
 		`mirv_streams record name "C:\videos folder\demo\masters\r03-p7-t1200"`,
 		"mirv_streams record start",
