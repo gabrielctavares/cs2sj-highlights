@@ -68,7 +68,7 @@ As duas opções da tela são exclusivas:
 - **Mostrar HUD do jogo**: mantém apenas a HUD nativa do CS2;
 - **Usar HUD personalizada**: usa a captura limpa e adiciona a HUD CS2SJ com campeonato, times, placar no início do round, mapa, round, jogador, tipo do highlight e logo local.
 
-O nome do campeonato pode ser alterado na tela principal. O editor visual da HUD mantém os campos avançados e também oferece uma base guiada com layout e cores coerentes para facilitar ajustes sem remontar o tema inteiro.
+O nome do campeonato pode ser alterado na tela principal. Quando ainda não existe um tema configurado, o aplicativo cria e seleciona automaticamente uma base pronta. O editor visual mantém os campos avançados, oferece o layout guiado e permite escolher separadamente as cores dos times A e B.
 
 O placar é extraído da demo e preserva a identidade dos times mesmo após a troca de lados. Quando ele não puder ser determinado com segurança, a HUD mostra um traço em vez de inventar um valor. A interface de replay, FPS, telemetria e informações de build ficam ocultas em todos os modos.
 

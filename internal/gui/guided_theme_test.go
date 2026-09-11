@@ -22,3 +22,12 @@ func TestApplyPaletteUpdatesTeamColors(t *testing.T) {
 		t.Fatal("palette was not applied")
 	}
 }
+
+func TestPaletteIndexSupportsIndependentTeamColors(t *testing.T) {
+	if got := paletteAt(paletteIndex("#16A34A", TeamBlue)); got != TeamGreen {
+		t.Fatalf("palette = %q, want %q", got, TeamGreen)
+	}
+	if got := paletteAt(paletteIndex("#unknown", TeamPurple)); got != TeamPurple {
+		t.Fatalf("fallback palette = %q, want %q", got, TeamPurple)
+	}
+}

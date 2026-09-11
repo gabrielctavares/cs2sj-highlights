@@ -33,6 +33,8 @@ type themeEditorWindow struct {
 	width    *walk.LineEdit
 	height   *walk.LineEdit
 	visible  *walk.CheckBox
+	teamA    *walk.ComboBox
+	teamB    *walk.ComboBox
 	dragging bool
 	resizing bool
 	lastX    float64
@@ -64,12 +66,15 @@ func RunThemeEditor(owner walk.Form, path string) error {
 	}
 	ApplyGuidedLayout(&theme)
 	editor := &themeEditorWindow{path: path, state: NewEditorState(theme)}
+	teamAIndex := paletteIndex(findGuidedElement(theme, "team-a-panel").Color, TeamBlue)
+	teamBIndex := paletteIndex(findGuidedElement(theme, "team-b-panel").Color, TeamOrange)
 	_, err = (Dialog{AssignTo: &editor.dialog, Title: "Editor visual de HUD — 16:9", MinSize: Size{Width: 1180, Height: 720}, Layout: HBox{Margins: Margins{Left: 12, Top: 12, Right: 12, Bottom: 12}, Spacing: 10}, Children: []Widget{
 		Composite{MinSize: Size{Width: 200}, Layout: VBox{Spacing: 6}, Children: []Widget{
 			Label{Text: "Cores dos times"},
-			PushButton{Text: "Azul × Laranja", OnClicked: func() { editor.applyPalette(TeamBlue, TeamOrange) }},
-			PushButton{Text: "Vermelho × Verde", OnClicked: func() { editor.applyPalette(TeamRed, TeamGreen) }},
-			PushButton{Text: "Roxo × Azul", OnClicked: func() { editor.applyPalette(TeamPurple, TeamBlue) }},
+			Label{Text: "Time A"},
+			ComboBox{AssignTo: &editor.teamA, Model: paletteLabels(), CurrentIndex: teamAIndex, OnCurrentIndexChanged: editor.applySelectedTeamColors},
+			Label{Text: "Time B"},
+			ComboBox{AssignTo: &editor.teamB, Model: paletteLabels(), CurrentIndex: teamBIndex, OnCurrentIndexChanged: editor.applySelectedTeamColors},
 			Label{Text: "Camadas"}, ListBox{AssignTo: &editor.layers, Model: editor.layerNames(), StretchFactor: 1, OnCurrentIndexChanged: editor.selectLayer},
 			PushButton{Text: "+ Caixa", OnClicked: func() { editor.add(hudtheme.Box) }}, PushButton{Text: "+ Texto", OnClicked: func() { editor.add(hudtheme.Text) }}, PushButton{Text: "+ Imagem", OnClicked: editor.addImage}, PushButton{Text: "Subir camada", OnClicked: func() { editor.moveLayer(1) }}, PushButton{Text: "Descer camada", OnClicked: func() { editor.moveLayer(-1) }}, PushButton{Text: "Remover", OnClicked: editor.remove},
 		}},
@@ -120,8 +125,11 @@ func (editor *themeEditorWindow) add(kind hudtheme.ElementType) {
 		editor.refresh()
 	}
 }
-func (editor *themeEditorWindow) applyPalette(a, b TeamPalette) {
-	ApplyPalette(&editor.state.Theme, a, b)
+func (editor *themeEditorWindow) applySelectedTeamColors() {
+	if editor.updating || editor.teamA == nil || editor.teamB == nil || editor.teamA.CurrentIndex() < 0 || editor.teamB.CurrentIndex() < 0 {
+		return
+	}
+	ApplyPalette(&editor.state.Theme, paletteAt(editor.teamA.CurrentIndex()), paletteAt(editor.teamB.CurrentIndex()))
 	editor.refresh()
 }
 func (editor *themeEditorWindow) moveLayer(direction int) {

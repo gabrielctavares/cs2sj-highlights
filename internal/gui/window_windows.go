@@ -158,6 +158,13 @@ func (window *applicationWindow) create(config Config) error {
 	window.playerModel = newChoiceTableModel()
 	window.finalModel = newChoiceTableModel()
 	window.favoriteSteamID = config.FavoriteSteamID
+	if strings.TrimSpace(config.HUDThemePath) == "" {
+		path, err := DefaultHUDThemePath(filepath.Join(filepath.Dir(window.configPath), "themes"))
+		if err != nil {
+			return fmt.Errorf("criar tema padrão da HUD: %w", err)
+		}
+		config.HUDThemePath = path
+	}
 	eventName := strings.TrimSpace(config.EventName)
 	if eventName == "" {
 		eventName = defaultEventNameFromInput(config.InputDir)

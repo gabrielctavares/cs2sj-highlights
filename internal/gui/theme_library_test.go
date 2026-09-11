@@ -25,6 +25,9 @@ func TestCreateAndListHUDThemes(t *testing.T) {
 	if len(themes) != 1 || themes[0].Path != path || themes[0].Theme.Name != "Final de Inverno" {
 		t.Fatalf("unexpected themes: %#v", themes)
 	}
+	if findGuidedElement(themes[0].Theme, "team-a-panel") == nil || findGuidedElement(themes[0].Theme, "team-b-panel") == nil {
+		t.Fatal("new theme did not receive the guided default layout")
+	}
 }
 
 func TestDefaultHUDThemePathUsesExistingTheme(t *testing.T) {

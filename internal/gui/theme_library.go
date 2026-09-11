@@ -62,6 +62,7 @@ func CreateHUDTheme(root, name string) (string, error) {
 	}
 	theme := hudtheme.DefaultTheme()
 	theme.Name = name
+	ApplyGuidedLayout(&theme)
 	if err := hudtheme.Save(path, theme); err != nil {
 		return "", err
 	}

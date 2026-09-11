@@ -1,6 +1,10 @@
 package gui
 
-import "github.com/gabrielctavares/cs2sj-highlights/internal/hudtheme"
+import (
+	"strings"
+
+	"github.com/gabrielctavares/cs2sj-highlights/internal/hudtheme"
+)
 
 type TeamPalette string
 
@@ -12,10 +16,35 @@ const (
 	TeamPurple TeamPalette = "purple"
 )
 
+var teamPalettes = []TeamPalette{TeamBlue, TeamOrange, TeamRed, TeamGreen, TeamPurple}
+
+func paletteLabels() []string {
+	return []string{"Azul", "Laranja", "Vermelho", "Verde", "Roxo"}
+}
+
+func paletteAt(index int) TeamPalette {
+	if index < 0 || index >= len(teamPalettes) {
+		return TeamBlue
+	}
+	return teamPalettes[index]
+}
+
+func paletteIndex(color string, fallback TeamPalette) int {
+	for index, palette := range teamPalettes {
+		if strings.EqualFold(paletteColor(palette), strings.TrimSpace(color)) {
+			return index
+		}
+	}
+	for index, palette := range teamPalettes {
+		if palette == fallback {
+			return index
+		}
+	}
+	return 0
+}
+
 func ApplyGuidedLayout(theme *hudtheme.Theme) {
-	ensureGuidedBox(theme, "team-a-panel", 18, 4, 22, 8, "#1D4ED8")
-	ensureGuidedBox(theme, "team-b-panel", 60, 4, 22, 8, "#EA580C")
-	ensureGuidedBox(theme, "score-panel", 40, 4, 20, 8, "#111827")
+	ensureGuidedPanels(theme)
 	for index := range theme.Elements {
 		e := &theme.Elements[index]
 		switch e.ID {
@@ -38,8 +67,14 @@ func ApplyGuidedLayout(theme *hudtheme.Theme) {
 		}
 	}
 }
+
+func ensureGuidedPanels(theme *hudtheme.Theme) {
+	ensureGuidedBox(theme, "team-a-panel", 18, 4, 22, 8, "#1D4ED8")
+	ensureGuidedBox(theme, "team-b-panel", 60, 4, 22, 8, "#EA580C")
+	ensureGuidedBox(theme, "score-panel", 40, 4, 20, 8, "#111827")
+}
 func ApplyPalette(theme *hudtheme.Theme, a, b TeamPalette) {
-	ApplyGuidedLayout(theme)
+	ensureGuidedPanels(theme)
 	findGuidedElement(*theme, "team-a-panel").Color = paletteColor(a)
 	findGuidedElement(*theme, "team-b-panel").Color = paletteColor(b)
 }
